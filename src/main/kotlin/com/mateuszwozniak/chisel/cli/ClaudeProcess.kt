@@ -7,6 +7,7 @@ import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.process.ProcessOutputTypes
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.util.Key
+import com.intellij.util.io.BaseOutputReader
 import java.io.OutputStreamWriter
 import java.nio.charset.StandardCharsets
 
@@ -17,9 +18,10 @@ class ClaudeProcess(
     private val onTerminated: (Int) -> Unit,
 ) : Disposable {
 
-    private val handler = KillableProcessHandler(commandLine).apply {
-        setShouldDestroyProcessRecursively(true)
-    }
+    private val handler = object : KillableProcessHandler(commandLine) {
+        override fun readerOptions(): BaseOutputReader.Options =
+            BaseOutputReader.Options.forMostlySilentProcess()
+    }.apply { setShouldDestroyProcessRecursively(true) }
 
     private val readLock = Any()
     private val writeLock = Any()

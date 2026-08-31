@@ -58,7 +58,7 @@ class SessionTranscript(private val file: Path) {
         val parent = entry.string("parentToolUseId")
         ContentBlock.parseList(content).forEach { block ->
             when (block) {
-                is ContentBlock.Text -> items.add(TranscriptItem.AssistantText(nextId(), block.text))
+                is ContentBlock.Text -> items.add(TranscriptItem.AssistantText(nextId(), block.text, parent))
 
                 is ContentBlock.ToolUse -> {
                     val call = TranscriptItem.ToolCall(nextId(), block.id, block.name, block.input, parent)

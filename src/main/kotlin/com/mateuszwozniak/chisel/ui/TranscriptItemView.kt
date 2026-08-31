@@ -30,16 +30,18 @@ class TranscriptItemView(
 ) : JPanel(BorderLayout()) {
 
     private val style = styleOf(item)
+    private val nested = parentOf(item) != null
     private val badge = if (style == Style.BADGE) Badge() else null
     private val view = if (style == Style.BADGE) null else HtmlView(parent)
     private val generation = AtomicLong()
 
     init {
         isOpaque = false
+        val indent = if (nested) JBUI.scale(NESTED_INDENT) else 0
         border = when (style) {
             Style.BUBBLE -> JBUI.Borders.empty(10, MARGIN + 12)
-            Style.BADGE -> JBUI.Borders.empty(1, 12)
-            Style.PLAIN -> JBUI.Borders.empty(2, 12)
+            Style.BADGE -> JBUI.Borders.empty(1, 12 + indent, 1, 12)
+            Style.PLAIN -> JBUI.Borders.empty(2, 12 + indent, 2, 12)
         }
         add(content(), BorderLayout.CENTER)
         refresh()
@@ -55,6 +57,7 @@ class TranscriptItemView(
     }
 
     override fun paintComponent(graphics: Graphics) {
+        if (nested) paintRail(graphics)
         if (style != Style.BUBBLE) return super.paintComponent(graphics)
         val canvas = graphics.create() as Graphics2D
         canvas.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
@@ -69,6 +72,13 @@ class TranscriptItemView(
     }
 
     var onRendered: () -> Unit = {}
+
+    private fun paintRail(graphics: Graphics) {
+        val canvas = graphics.create() as Graphics2D
+        canvas.color = JBColor.border()
+        canvas.fillRect(JBUI.scale(RAIL_OFFSET), 0, JBUI.scale(RAIL_WIDTH), height)
+        canvas.dispose()
+    }
 
     fun refresh() {
         val chip = badge
@@ -135,6 +145,12 @@ class TranscriptItemView(
         return parts.joinToString("  ·  ")
     }
 
+    private fun parentOf(item: TranscriptItem): String? = when (item) {
+        is TranscriptItem.AssistantText -> item.parentToolUseId
+        is TranscriptItem.ToolCall -> item.parentToolUseId
+        else -> null
+    }
+
     private fun styleOf(item: TranscriptItem): Style = when (item) {
         is TranscriptItem.UserPrompt -> Style.BUBBLE
         is TranscriptItem.ToolCall -> Style.BADGE
@@ -182,5 +198,8 @@ class TranscriptItemView(
     private companion object {
         const val ARC = 12
         const val MARGIN = 12
+        const val NESTED_INDENT = 16
+        const val RAIL_OFFSET = 14
+        const val RAIL_WIDTH = 2
     }
 }

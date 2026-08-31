@@ -34,12 +34,19 @@ class OptionsBar(private val controller: ConversationController) :
 
     init {
         isOpaque = false
+        mode.toolTipText = Shortcuts.hinted("Mode", Shortcuts.cycleModeLabel())
+        model.toolTipText = Shortcuts.hinted("Model", Shortcuts.cycleModelLabel())
+        effort.toolTipText = Shortcuts.hinted("Effort", Shortcuts.cycleEffortLabel())
         add(mode)
         add(model)
         add(effort)
     }
 
     fun toggleMode() = mode.advance()
+
+    fun cycleModel() = model.advance()
+
+    fun cycleEffort() = effort.advance()
 
     fun refresh() {
         mode.show(conversation.mode)

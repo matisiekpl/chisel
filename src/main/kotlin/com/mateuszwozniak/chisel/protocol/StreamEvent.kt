@@ -6,6 +6,21 @@ sealed interface StreamEvent {
         val sessionId: String,
         val model: String?,
         val capabilities: List<String>,
+        val slashCommands: List<String>,
+    ) : StreamEvent
+
+    data class TaskStarted(
+        val taskId: String,
+        val toolUseId: String?,
+        val description: String,
+        val subagentType: String?,
+        val backgrounded: Boolean,
+    ) : StreamEvent
+
+    data class TaskProgress(
+        val taskId: String,
+        val status: String?,
+        val outputFile: String?,
     ) : StreamEvent
 
     data class TextDelta(val text: String) : StreamEvent

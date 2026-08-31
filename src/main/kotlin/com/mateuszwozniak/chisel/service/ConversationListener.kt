@@ -23,4 +23,6 @@ interface ConversationListener {
     fun onOptionsChanged() = Unit
 
     fun onQueueChanged(queued: List<QueuedPrompt>) = Unit
+
+    fun onTasksChanged() = Unit
 }

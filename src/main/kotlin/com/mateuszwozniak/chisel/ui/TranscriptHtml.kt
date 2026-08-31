@@ -18,11 +18,16 @@ class TranscriptHtml(private val renderer: MarkdownRenderer, private val basePat
 
     fun detail(item: TranscriptItem.ToolCall): String = toolDetail(item)
 
+    fun markdown(text: String): String = renderer.render(text)
+
     fun toolSummary(name: String, input: JsonObject): String = when (name) {
         "Bash" -> input.string("command").orEmpty()
         "Grep" -> input.string("pattern").orEmpty()
         "Glob" -> input.string("pattern").orEmpty()
-        "Task" -> input.string("description").orEmpty()
+        "Task" -> listOfNotNull(input.string("subagent_type"), input.string("description"))
+            .joinToString(" · ")
+
+        "Workflow" -> input.string("name") ?: input.string("description").orEmpty()
         "WebFetch" -> input.string("url").orEmpty()
         "WebSearch" -> input.string("query").orEmpty()
         else -> filePathOf(input)?.let { relative(it) } ?: ""

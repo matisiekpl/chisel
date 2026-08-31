@@ -59,6 +59,7 @@ class TranscriptStore(private val project: Project) {
             is TranscriptItem.AssistantText -> {
                 addProperty("kind", "assistant")
                 addProperty("text", item.text)
+                addProperty("parent", item.parentToolUseId)
             }
 
             is TranscriptItem.Thinking -> {
@@ -102,7 +103,11 @@ class TranscriptStore(private val project: Project) {
                     ?.mapNotNull { it.takeIf { element -> element.isJsonPrimitive }?.asString }
                     .orEmpty(),
             )
-            "assistant" -> TranscriptItem.AssistantText(id, json.string("text").orEmpty())
+            "assistant" -> TranscriptItem.AssistantText(
+                id,
+                json.string("text").orEmpty(),
+                json.string("parent"),
+            )
             "thinking" -> TranscriptItem.Thinking(id, json.string("text").orEmpty())
 
             "tool" -> TranscriptItem.ToolCall(

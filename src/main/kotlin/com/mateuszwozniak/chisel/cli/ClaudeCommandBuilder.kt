@@ -22,6 +22,9 @@ class ClaudeCommandBuilder(
         commandLine.addParameters("--allowedTools", AUTO_APPROVED_TOOLS)
         commandLine.addParameters("--model", options.model.alias)
         commandLine.addParameters("--effort", options.effort.value)
+        if (options.effort.ultracode) {
+            commandLine.addParameters("--settings", ULTRACODE_SETTINGS)
+        }
         commandLine.addParameters(sessionParameters(start))
         return commandLine
     }
@@ -36,6 +39,8 @@ class ClaudeCommandBuilder(
     companion object {
 
         const val CHECKPOINTING_VARIABLE = "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING"
+
+        private const val ULTRACODE_SETTINGS = "{\"ultracode\":true}"
 
         private const val AUTO_APPROVED_TOOLS =
             "Read,Glob,Grep,WebFetch,WebSearch,TodoWrite,Task"

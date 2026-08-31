@@ -17,6 +17,12 @@ class Conversation(
 
     val todos: MutableList<TodoItem> = CopyOnWriteArrayList()
 
+    val slashCommands: MutableList<String> = CopyOnWriteArrayList()
+
+    val tasks: MutableList<AgentTask> = CopyOnWriteArrayList()
+
+    fun turn(): Int = transcript.count { it is TranscriptItem.UserPrompt }
+
     fun truncateAt(messageUuid: String) {
         val index = transcript.indexOfFirst {
             it is TranscriptItem.UserPrompt && it.messageUuid == messageUuid

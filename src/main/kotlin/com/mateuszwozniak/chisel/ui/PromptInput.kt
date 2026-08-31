@@ -30,6 +30,7 @@ import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
 import java.awt.datatransfer.DataFlavor
+import java.awt.datatransfer.StringSelection
 import java.awt.dnd.DnDConstants
 import java.awt.dnd.DropTarget
 import java.awt.dnd.DropTargetAdapter
@@ -59,7 +60,7 @@ class PromptInput(
 
     private val promptField = object : TextFieldWithCompletion(
         project,
-        FilePathCompletionProvider(project),
+        FilePathCompletionProvider(project) { commands() },
         "",
         false,
         true,
@@ -75,7 +76,7 @@ class PromptInput(
     )
 
     private val stopButton = InplaceButton(
-        "Stop (Escape)",
+        "Stop (Escape or " + Shortcuts.INTERRUPT_LABEL + ")",
         AllIcons.Actions.Pause,
         ActionListener { onStop() },
     )
@@ -111,6 +112,8 @@ class PromptInput(
     var onQueuePop: () -> QueuedPrompt? = { null }
 
     var onHistory: (Int) -> String? = { null }
+
+    var commands: () -> List<String> = { emptyList() }
 
     private val dropListener = object : DropTargetAdapter() {
         override fun dragOver(event: DropTargetDragEvent) {
@@ -243,10 +246,25 @@ class PromptInput(
         }
         stopAction.registerCustomShortcutSet(CommonShortcuts.ESCAPE, promptField)
 
+        val interruptAction = object : AnAction() {
+            override fun actionPerformed(event: AnActionEvent) = interruptOrCopy()
+        }
+        interruptAction.registerCustomShortcutSet(Shortcuts.interrupt(), promptField)
+
         val modeAction = object : AnAction() {
             override fun actionPerformed(event: AnActionEvent) = options.toggleMode()
         }
         modeAction.registerCustomShortcutSet(modeShortcut(), promptField)
+
+        val modelAction = object : AnAction() {
+            override fun actionPerformed(event: AnActionEvent) = options.cycleModel()
+        }
+        modelAction.registerCustomShortcutSet(Shortcuts.cycleModel(), promptField)
+
+        val effortAction = object : AnAction() {
+            override fun actionPerformed(event: AnActionEvent) = options.cycleEffort()
+        }
+        effortAction.registerCustomShortcutSet(Shortcuts.cycleEffort(), promptField)
 
         pasteShortcut()?.let { pasteAction.registerCustomShortcutSet(it, promptField) }
         editQueueAction.registerCustomShortcutSet(Shortcuts.arrow(KeyEvent.VK_UP), promptField)
@@ -318,6 +336,16 @@ class PromptInput(
             transferable?.getTransferData(DataFlavor.stringFlavor) as? String
         }.getOrNull() ?: return
         insert(text)
+    }
+
+    private fun interruptOrCopy() {
+        val editor = promptField.editor
+        val selected = editor?.selectionModel?.selectedText
+        if (!selected.isNullOrEmpty()) {
+            CopyPasteManager.getInstance().setContents(StringSelection(selected))
+            return
+        }
+        if (busy) onStop()
     }
 
     private fun insert(text: String) {

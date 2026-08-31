@@ -139,20 +139,42 @@ class StreamJsonCodec {
         else -> null
     }
 
-    private fun parseSystem(root: JsonObject): StreamEvent? = when (root.string("subtype")) {
-        "init" -> StreamEvent.SessionStarted(
-            root.string("session_id").orEmpty(),
-            root.string("model"),
-            root.getAsJsonArray("capabilities")?.mapNotNull { it.asString }.orEmpty(),
-        )
+    private fun parseSystem(root: JsonObject): StreamEvent? {
+        val taskId = root.string("task_id")
+        return when (root.string("subtype")) {
+            "init" -> StreamEvent.SessionStarted(
+                root.string("session_id").orEmpty(),
+                root.string("model"),
+                root.getAsJsonArray("capabilities")?.mapNotNull { it.asString }.orEmpty(),
+                root.getAsJsonArray("slash_commands")?.mapNotNull { it.asString }.orEmpty(),
+            )
 
-        "api_retry" -> StreamEvent.ApiRetry(
-            root.number("attempt")?.toInt() ?: 0,
-            root.number("max_retries")?.toInt() ?: 0,
-            root.string("error").orEmpty(),
-        )
+            "task_started" -> taskId?.let {
+                StreamEvent.TaskStarted(
+                    it,
+                    root.string("tool_use_id"),
+                    root.string("description").orEmpty(),
+                    root.string("subagent_type"),
+                    root.bool("is_backgrounded"),
+                )
+            }
 
-        else -> null
+            "task_updated" -> taskId?.let {
+                StreamEvent.TaskProgress(it, root.obj("patch")?.string("status"), null)
+            }
+
+            "task_notification" -> taskId?.let {
+                StreamEvent.TaskProgress(it, root.string("status"), root.string("output_file"))
+            }
+
+            "api_retry" -> StreamEvent.ApiRetry(
+                root.number("attempt")?.toInt() ?: 0,
+                root.number("max_retries")?.toInt() ?: 0,
+                root.string("error").orEmpty(),
+            )
+
+            else -> null
+        }
     }
 
     private fun parseDelta(root: JsonObject): StreamEvent? {

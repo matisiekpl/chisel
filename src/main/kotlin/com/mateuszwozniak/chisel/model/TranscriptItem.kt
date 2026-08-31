@@ -13,7 +13,11 @@ sealed interface TranscriptItem {
         val attachments: List<String> = emptyList(),
     ) : TranscriptItem
 
-    class AssistantText(override val id: String, var text: String = "") : TranscriptItem
+    class AssistantText(
+        override val id: String,
+        var text: String = "",
+        val parentToolUseId: String? = null,
+    ) : TranscriptItem
 
     class Thinking(override val id: String, var text: String = "") : TranscriptItem
 

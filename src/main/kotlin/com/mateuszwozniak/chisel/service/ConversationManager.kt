@@ -83,6 +83,9 @@ class ConversationManager(private val project: Project) : Disposable {
 
     fun create(): ConversationController = create(null, nextTitle())
 
+    fun createOrReuse(): ConversationController =
+        controllers.values.firstOrNull { it.conversation.transcript.isEmpty() } ?: create()
+
     fun create(sessionId: String?, title: String): ConversationController {
         val settings = ChiselSettings.getInstance()
         val mode = settings.defaultMode

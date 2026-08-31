@@ -11,6 +11,7 @@ import com.mateuszwozniak.chisel.cli.SessionListener
 import com.mateuszwozniak.chisel.cli.SessionStart
 import com.mateuszwozniak.chisel.model.AgentMode
 import com.mateuszwozniak.chisel.model.AgentModel
+import com.mateuszwozniak.chisel.model.AgentTask
 import com.mateuszwozniak.chisel.model.EffortLevel
 import com.mateuszwozniak.chisel.model.PromptAttachment
 import com.mateuszwozniak.chisel.model.QueuedPrompt
@@ -160,7 +161,9 @@ class ConversationController(
 
     override fun onEvent(event: StreamEvent) {
         when (event) {
-            is StreamEvent.SessionStarted -> adoptSession(event.sessionId)
+            is StreamEvent.SessionStarted -> adoptSession(event)
+            is StreamEvent.TaskStarted -> startTask(event)
+            is StreamEvent.TaskProgress -> updateTask(event)
             is StreamEvent.TextDelta -> appendTextDelta(event.text)
             is StreamEvent.ThinkingDelta -> appendThinkingDelta(event.text)
             is StreamEvent.AssistantTurn -> applyAssistantTurn(event)
@@ -204,10 +207,35 @@ class ConversationController(
         listeners.clear()
     }
 
-    private fun adoptSession(sessionId: String) {
+    private fun startTask(event: StreamEvent.TaskStarted) {
+        if (conversation.tasks.any { it.id == event.taskId }) return
+        conversation.tasks.add(
+            AgentTask(
+                event.taskId,
+                event.toolUseId,
+                event.description,
+                event.subagentType,
+                event.backgrounded,
+                conversation.turn(),
+            )
+        )
+        listeners.forEach { it.onTasksChanged() }
+    }
+
+    private fun updateTask(event: StreamEvent.TaskProgress) {
+        val task = conversation.tasks.firstOrNull { it.id == event.taskId } ?: return
+        event.status?.let { task.status = it }
+        event.outputFile?.let { task.outputFile = it }
+        listeners.forEach { it.onTasksChanged() }
+    }
+
+    private fun adoptSession(event: StreamEvent.SessionStarted) {
+        val sessionId = event.sessionId
         val requested = resumedSessionId
         resumedSessionId = null
         conversation.sessionId = sessionId
+        conversation.slashCommands.clear()
+        conversation.slashCommands.addAll(event.slashCommands)
         listeners.forEach { it.onSessionStarted() }
         if (requested != null && requested != sessionId) {
             appendNotice(
@@ -253,7 +281,7 @@ class ConversationController(
         streamingItems.clear()
         event.blocks.forEach { block ->
             when (block) {
-                is ContentBlock.Text -> settleText(pending, block.text)
+                is ContentBlock.Text -> settleText(pending, block.text, event.parentToolUseId)
 
                 is ContentBlock.Thinking -> settleThinking(pending, block.text)
 
@@ -265,14 +293,18 @@ class ConversationController(
         discard(pending)
     }
 
-    private fun settleText(pending: ArrayDeque<TranscriptItem>, text: String) {
+    private fun settleText(
+        pending: ArrayDeque<TranscriptItem>,
+        text: String,
+        parentToolUseId: String?,
+    ) {
         val existing = takeMatching<TranscriptItem.AssistantText>(pending)
         if (existing != null) {
             existing.text = text
             listeners.forEach { it.onItemUpdated(existing) }
             return
         }
-        if (text.isNotBlank()) appendItem(TranscriptItem.AssistantText(nextId(), text))
+        if (text.isNotBlank()) appendItem(TranscriptItem.AssistantText(nextId(), text, parentToolUseId))
     }
 
     private fun settleThinking(pending: ArrayDeque<TranscriptItem>, text: String) {
