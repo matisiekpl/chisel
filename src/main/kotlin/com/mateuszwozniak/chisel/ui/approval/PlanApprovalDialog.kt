@@ -4,18 +4,21 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.ScrollPaneFactory
-import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBUI
+import com.mateuszwozniak.chisel.ui.BadgeShape
 import com.mateuszwozniak.chisel.ui.HtmlView
 import com.mateuszwozniak.chisel.ui.MarkdownRenderer
 import java.awt.BorderLayout
 import java.awt.Dimension
+import java.awt.Graphics
 import java.awt.event.ActionEvent
 import javax.swing.Action
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.event.DocumentEvent
 
 class PlanApprovalDialog(
     private val project: Project,
@@ -24,19 +27,12 @@ class PlanApprovalDialog(
 
     enum class Outcome { IMPLEMENT, KEEP_PLANNING }
 
-    private val notesField = JBTextArea(3, 40)
+    private val feedbackField = JBTextArea(FEEDBACK_ROWS, 40)
 
-    private val implementAction = object : DialogWrapperAction("Start implementing") {
+    private val submitAction = object : DialogWrapperAction(IMPLEMENT_LABEL) {
         override fun doAction(event: ActionEvent) {
-            outcome = Outcome.IMPLEMENT
+            outcome = if (notes().isEmpty()) Outcome.IMPLEMENT else Outcome.KEEP_PLANNING
             close(OK_EXIT_CODE)
-        }
-    }
-
-    private val keepPlanningAction = object : DialogWrapperAction("Keep planning") {
-        override fun doAction(event: ActionEvent) {
-            outcome = Outcome.KEEP_PLANNING
-            close(CANCEL_EXIT_CODE)
         }
     }
 
@@ -45,10 +41,11 @@ class PlanApprovalDialog(
 
     init {
         title = "Plan ready"
+        submitAction.putValue(DEFAULT_ACTION, true)
         init()
     }
 
-    fun notes(): String = notesField.text.trim()
+    fun notes(): String = feedbackField.text.trim()
 
     override fun createCenterPanel(): JComponent {
         val panel = JPanel(BorderLayout(0, JBUI.scale(8)))
@@ -58,16 +55,42 @@ class PlanApprovalDialog(
         panel.add(ScrollPaneFactory.createScrollPane(view.component, true), BorderLayout.CENTER)
         renderPlanInto(view)
 
-        val footer = JPanel(BorderLayout(0, JBUI.scale(4)))
-        footer.add(JBLabel("Notes, sent back to the agent when you keep planning"), BorderLayout.NORTH)
-        notesField.lineWrap = true
-        notesField.wrapStyleWord = true
-        footer.add(ScrollPaneFactory.createScrollPane(notesField, true), BorderLayout.CENTER)
-        panel.add(footer, BorderLayout.SOUTH)
+        panel.add(feedbackCard(), BorderLayout.SOUTH)
         return panel
     }
 
-    override fun createActions(): Array<Action> = arrayOf(implementAction, keepPlanningAction)
+    private fun feedbackCard(): JComponent {
+        feedbackField.lineWrap = true
+        feedbackField.wrapStyleWord = true
+        feedbackField.isOpaque = false
+        feedbackField.font = JBUI.Fonts.label()
+        feedbackField.border = JBUI.Borders.empty(2)
+        feedbackField.emptyText.text = "Feedback on the plan, sent back to the agent"
+        feedbackField.document.addDocumentListener(object : DocumentAdapter() {
+            override fun textChanged(event: DocumentEvent) {
+                submitAction.putValue(
+                    Action.NAME,
+                    if (notes().isEmpty()) IMPLEMENT_LABEL else FEEDBACK_LABEL,
+                )
+            }
+        })
+
+        val scroll = ScrollPaneFactory.createScrollPane(feedbackField, true)
+        scroll.isOpaque = false
+        scroll.viewport.isOpaque = false
+
+        val card = object : JPanel(BorderLayout()) {
+            override fun paintComponent(graphics: Graphics) {
+                BadgeShape.paint(graphics, width, height, false)
+            }
+        }
+        card.isOpaque = false
+        card.border = JBUI.Borders.empty(8, 10)
+        card.add(scroll, BorderLayout.CENTER)
+        return card
+    }
+
+    override fun createActions(): Array<Action> = arrayOf(submitAction)
 
     override fun getDimensionServiceKey(): String = "Chisel.PlanApproval"
 
@@ -82,6 +105,9 @@ class PlanApprovalDialog(
     }
 
     private companion object {
+        const val IMPLEMENT_LABEL = "Implement"
+        const val FEEDBACK_LABEL = "Send feedback"
+        const val FEEDBACK_ROWS = 4
         const val WIDTH = 760
         const val HEIGHT = 520
     }

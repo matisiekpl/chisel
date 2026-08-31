@@ -10,6 +10,8 @@ import com.mateuszwozniak.chisel.cli.ClaudeSession
 import com.mateuszwozniak.chisel.cli.SessionListener
 import com.mateuszwozniak.chisel.cli.SessionStart
 import com.mateuszwozniak.chisel.model.AgentMode
+import com.mateuszwozniak.chisel.model.AgentModel
+import com.mateuszwozniak.chisel.model.EffortLevel
 import com.mateuszwozniak.chisel.model.Conversation
 import com.mateuszwozniak.chisel.model.TodoItem
 import com.mateuszwozniak.chisel.model.TodoStatus
@@ -20,7 +22,9 @@ import com.mateuszwozniak.chisel.protocol.PermissionRequest
 import com.mateuszwozniak.chisel.protocol.StreamEvent
 import com.mateuszwozniak.chisel.protocol.WriteToolInput
 import com.mateuszwozniak.chisel.protocol.string
+import com.mateuszwozniak.chisel.state.ChiselSettings
 import com.mateuszwozniak.chisel.util.VfsRefresh
+import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
 
@@ -60,8 +64,23 @@ class ConversationController(
 
     fun changeMode(mode: AgentMode) {
         conversation.mode = mode
+        val settings = ChiselSettings.getInstance()
+        conversation.model = settings.modelFor(mode)
+        conversation.effort = settings.effortFor(mode)
         session?.takeIf { it.isRunning() }?.changeMode(mode)
-        listeners.forEach { it.onModeChanged(mode) }
+        listeners.forEach { it.onOptionsChanged() }
+    }
+
+    fun changeModel(model: AgentModel) {
+        conversation.model = model
+        restartOnNextPrompt()
+        listeners.forEach { it.onOptionsChanged() }
+    }
+
+    fun changeEffort(effort: EffortLevel) {
+        conversation.effort = effort
+        restartOnNextPrompt()
+        listeners.forEach { it.onOptionsChanged() }
     }
 
     fun interrupt() {
@@ -84,7 +103,7 @@ class ConversationController(
                 toolCalls.clear()
             }
             listeners.forEach { it.onTranscriptReset() }
-            current.start(conversation.mode, SessionStart.ResumeAt(sessionIdentifier, messageUuid))
+            current.start(conversation.options(), SessionStart.ResumeAt(sessionIdentifier, messageUuid))
             VfsRefresh.refreshEverything()
             changeBusy(false)
             onFinished(promptText)
@@ -157,6 +176,10 @@ class ConversationController(
         listeners.clear()
     }
 
+    private fun restartOnNextPrompt() {
+        session?.takeIf { it.isRunning() }?.stop()
+    }
+
     private fun ensureSession(): ClaudeSession? {
         session?.takeIf { it.isRunning() }?.let { return it }
         val executable = ClaudeExecutable.locate() ?: run {
@@ -172,10 +195,10 @@ class ConversationController(
             Disposer.register(this, it)
         }
         val identifier = conversation.sessionId
-        val start = if (identifier == null) SessionStart.Fresh(conversation.id)
+        val start = if (identifier == null) SessionStart.Fresh(UUID.randomUUID().toString())
         else SessionStart.Resume(identifier)
         return try {
-            created.start(conversation.mode, start)
+            created.start(conversation.options(), start)
             created
         } catch (failure: Exception) {
             appendNotice("Could not start Claude Code: " + failure.message, true)

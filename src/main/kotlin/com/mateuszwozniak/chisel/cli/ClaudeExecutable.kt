@@ -21,7 +21,13 @@ object ClaudeExecutable {
             .firstOrNull { Files.isExecutable(it) }
     }
 
-    fun missingMessage(): String =
-        "Claude Code CLI was not found. Install it, then run 'claude auth login' in a terminal " +
-            "so the plugin can start a session with your own subscription."
+    fun missingMessage(): String = "$MISSING_HEADLINE. $MISSING_DETAIL"
+
+    const val MISSING_HEADLINE = "Claude Code CLI was not found"
+
+    const val MISSING_DETAIL =
+        "Chisel drives the CLI installed on this machine, so it cannot run without it"
+
+    const val MISSING_HINT =
+        "Install Claude Code, run claude in a terminal to sign in, then reopen this tool window"
 }

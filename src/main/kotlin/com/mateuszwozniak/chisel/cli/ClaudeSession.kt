@@ -3,6 +3,7 @@ package com.mateuszwozniak.chisel.cli
 import com.google.gson.JsonObject
 import com.intellij.openapi.Disposable
 import com.mateuszwozniak.chisel.model.AgentMode
+import com.mateuszwozniak.chisel.model.SessionOptions
 import com.mateuszwozniak.chisel.protocol.IncomingFrame
 import com.mateuszwozniak.chisel.protocol.StreamEvent
 import java.util.concurrent.CompletableFuture
@@ -23,11 +24,11 @@ class ClaudeSession(
     var sessionId: String? = null
         private set
 
-    fun start(mode: AgentMode, start: SessionStart) {
+    fun start(options: SessionOptions, start: SessionStart) {
         stop()
         sessionId = start.sessionId
         val started = ClaudeProcess(
-            commandLine = commandBuilder.build(mode, start),
+            commandLine = commandBuilder.build(options, start),
             onLine = ::handleLine,
             onStandardError = listener::onStandardError,
             onTerminated = ::handleTerminated,

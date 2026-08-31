@@ -6,7 +6,10 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.mateuszwozniak.chisel.model.AgentMode
+import com.mateuszwozniak.chisel.model.AgentModel
 import com.mateuszwozniak.chisel.model.Conversation
+import com.mateuszwozniak.chisel.model.EffortLevel
+import com.mateuszwozniak.chisel.state.ChiselSettings
 import com.mateuszwozniak.chisel.state.ConversationEntry
 import com.mateuszwozniak.chisel.state.ConversationState
 import com.mateuszwozniak.chisel.ui.approval.ApprovalDialogs
@@ -29,10 +32,14 @@ class ConversationManager(private val project: Project) : Disposable {
         restored = true
         ConversationState.getInstance(project).state.entries.toList().forEach { entry ->
             val id = entry.id ?: return@forEach
+            val mode = AgentMode.fromPermissionMode(entry.mode.orEmpty())
+            val settings = ChiselSettings.getInstance()
             val conversation = Conversation(
                 id,
                 entry.title ?: nextTitle(),
-                AgentMode.fromPermissionMode(entry.mode.orEmpty()),
+                mode,
+                AgentModel.entries.firstOrNull { it.name == entry.model } ?: settings.modelFor(mode),
+                EffortLevel.entries.firstOrNull { it.name == entry.effort } ?: settings.effortFor(mode),
                 entry.sessionId,
             )
             conversation.transcript.addAll(store.load(id))
@@ -43,7 +50,16 @@ class ConversationManager(private val project: Project) : Disposable {
     }
 
     fun create(): ConversationController {
-        val controller = register(Conversation(UUID.randomUUID().toString(), nextTitle()))
+        val settings = ChiselSettings.getInstance()
+        val controller = register(
+            Conversation(
+                UUID.randomUUID().toString(),
+                nextTitle(),
+                AgentMode.PLAN,
+                settings.modelFor(AgentMode.PLAN),
+                settings.effortFor(AgentMode.PLAN),
+            )
+        )
         persist()
         notifyChanged()
         return controller
@@ -72,14 +88,16 @@ class ConversationManager(private val project: Project) : Disposable {
     }
 
     fun persist() {
-        val model = ConversationState.getInstance(project).state
-        model.entries = controllers.values.map { controller ->
+        val state = ConversationState.getInstance(project).state
+        state.entries = controllers.values.map { controller ->
             store.save(controller.conversation)
             ConversationEntry().apply {
                 id = controller.conversation.id
                 title = controller.conversation.title
                 sessionId = controller.conversation.sessionId
                 mode = controller.conversation.mode.permissionMode
+                model = controller.conversation.model.name
+                effort = controller.conversation.effort.name
             }
         }.toMutableList()
     }

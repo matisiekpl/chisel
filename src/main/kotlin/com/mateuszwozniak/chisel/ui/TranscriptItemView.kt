@@ -4,12 +4,13 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.ui.JBColor
+import com.intellij.ui.PopupHandler
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.mateuszwozniak.chisel.model.TranscriptItem
-import java.awt.BasicStroke
 import java.awt.BorderLayout
+import java.awt.Component
 import java.awt.Cursor
 import java.awt.Dimension
 import java.awt.FlowLayout
@@ -92,6 +93,15 @@ class TranscriptItemView(
         view?.onClicked(action)
     }
 
+    fun onContextMenu(action: (Component, Int, Int) -> Unit) {
+        val handler = object : PopupHandler() {
+            override fun invokePopup(component: Component, x: Int, y: Int) = action(component, x, y)
+        }
+        addMouseListener(handler)
+        view?.component?.addMouseListener(handler)
+        badge?.addMouseListener(handler)
+    }
+
     private fun content(): JComponent {
         val chip = badge ?: return view!!.component
         val row = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0))
@@ -100,17 +110,10 @@ class TranscriptItemView(
         return row
     }
 
-    private fun badgeTitle(): String = when (item) {
-        is TranscriptItem.Thinking -> "Thinking"
-        is TranscriptItem.ToolCall -> item.name
-        else -> ""
-    }
+    private fun badgeTitle(): String = (item as? TranscriptItem.ToolCall)?.name.orEmpty()
 
-    private fun badgeDetail(): String = when (item) {
-        is TranscriptItem.Thinking -> html.shorten(item.text)
-        is TranscriptItem.ToolCall -> toolDetail(item)
-        else -> ""
-    }
+    private fun badgeDetail(): String =
+        (item as? TranscriptItem.ToolCall)?.let(::toolDetail).orEmpty()
 
     private fun toolDetail(call: TranscriptItem.ToolCall): String {
         val parts = mutableListOf<String>()
@@ -124,7 +127,7 @@ class TranscriptItemView(
 
     private fun styleOf(item: TranscriptItem): Style = when (item) {
         is TranscriptItem.UserPrompt -> Style.BUBBLE
-        is TranscriptItem.Thinking, is TranscriptItem.ToolCall -> Style.BADGE
+        is TranscriptItem.ToolCall -> Style.BADGE
         else -> Style.PLAIN
     }
 
@@ -161,28 +164,9 @@ class TranscriptItemView(
         }
 
         override fun paintComponent(graphics: Graphics) {
-            val canvas = graphics.create() as Graphics2D
-            canvas.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            val arc = JBUI.scale(BADGE_ARC)
-            canvas.color = UIUtil.getTextFieldBackground()
-            canvas.fillRoundRect(0, 0, width, height, arc, arc)
-            canvas.color = JBColor.border()
-            canvas.stroke = BasicStroke(
-                1f,
-                BasicStroke.CAP_BUTT,
-                BasicStroke.JOIN_ROUND,
-                1f,
-                floatArrayOf(JBUI.scale(DASH).toFloat(), JBUI.scale(DASH).toFloat()),
-                0f,
-            )
-            canvas.drawRoundRect(0, 0, width - 1, height - 1, arc, arc)
-            canvas.dispose()
+            BadgeShape.paint(graphics, width, height, true)
         }
 
-        private companion object {
-            const val BADGE_ARC = 10
-            const val DASH = 3
-        }
     }
 
     private companion object {

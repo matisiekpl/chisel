@@ -6,8 +6,12 @@ class Conversation(
     val id: String,
     var title: String,
     var mode: AgentMode = AgentMode.PLAN,
+    var model: AgentModel = AgentModel.OPUS,
+    var effort: EffortLevel = EffortLevel.HIGH,
     var sessionId: String? = null,
 ) {
+
+    fun options(): SessionOptions = SessionOptions(mode, model, effort)
 
     val transcript: MutableList<TranscriptItem> = CopyOnWriteArrayList()
 

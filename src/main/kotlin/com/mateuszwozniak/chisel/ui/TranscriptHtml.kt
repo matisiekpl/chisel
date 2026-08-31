@@ -15,11 +15,7 @@ class TranscriptHtml(private val renderer: MarkdownRenderer, private val basePat
         is TranscriptItem.TurnSummary -> ""
     }
 
-    fun detail(item: TranscriptItem): String = when (item) {
-        is TranscriptItem.Thinking -> if (item.text.isBlank()) "" else renderer.render(item.text)
-        is TranscriptItem.ToolCall -> toolDetail(item)
-        else -> ""
-    }
+    fun detail(item: TranscriptItem.ToolCall): String = toolDetail(item)
 
     fun toolSummary(name: String, input: JsonObject): String = when (name) {
         "Bash" -> input.string("command").orEmpty()
@@ -36,10 +32,8 @@ class TranscriptHtml(private val renderer: MarkdownRenderer, private val basePat
 
     fun relative(path: String): String = ProjectPaths.relative(basePath, path)
 
-    private fun userPrompt(item: TranscriptItem.UserPrompt): String {
-        val hint = if (item.messageUuid == null) "" else "<div><small>Click to edit</small></div>"
-        return "<div>${escape(item.text).replace("\n", "<br>")}</div>$hint"
-    }
+    private fun userPrompt(item: TranscriptItem.UserPrompt): String =
+        "<div>${escape(item.text).replace("\n", "<br>")}</div>"
 
     private fun toolDetail(item: TranscriptItem.ToolCall): String {
         val arguments = pretty(item.input)

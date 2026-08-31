@@ -32,7 +32,7 @@ import javax.swing.KeyStroke
 
 class PromptInput(
     private val project: Project,
-    private val modeToggle: ModeToggle,
+    private val options: OptionsBar,
     private val onSubmit: (String) -> Unit,
     private val onStop: () -> Unit,
 ) : JPanel(BorderLayout()) {
@@ -65,7 +65,7 @@ class PromptInput(
     init {
         border = JBUI.Borders.empty(6, 8, 8, 8)
         promptField.setPlaceholder("Ask a question, or type @ to reference a file")
-        promptField.border = JBUI.Borders.empty()
+        promptField.border = JBUI.Borders.empty(0, TEXT_INSET)
         promptField.background = UIUtil.getTextFieldBackground()
         promptField.preferredSize = Dimension(0, JBUI.scale(FIELD_HEIGHT))
         promptField.addSettingsProvider { editor ->
@@ -111,10 +111,11 @@ class PromptInput(
 
         val left = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0))
         left.isOpaque = false
-        left.add(modeToggle)
+        left.add(options)
 
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0))
         right.isOpaque = false
+        right.border = JBUI.Borders.emptyRight(TEXT_INSET)
         right.add(sendButton)
         right.add(stopButton)
 
@@ -137,7 +138,7 @@ class PromptInput(
         stopAction.registerCustomShortcutSet(CommonShortcuts.ESCAPE, promptField)
 
         val modeAction = object : AnAction() {
-            override fun actionPerformed(event: AnActionEvent) = modeToggle.toggle()
+            override fun actionPerformed(event: AnActionEvent) = options.toggleMode()
         }
         modeAction.registerCustomShortcutSet(modeShortcut(), promptField)
     }
@@ -169,7 +170,7 @@ class PromptInput(
 
         init {
             isOpaque = false
-            border = JBUI.Borders.empty(8, 10)
+            border = JBUI.Borders.empty(8, EDGE)
         }
 
         fun showFocused(value: Boolean) {
@@ -195,5 +196,7 @@ class PromptInput(
         const val FIELD_HEIGHT = 88
         const val ARC = 14
         const val BUTTON_SIZE = 24
+        const val EDGE = 4
+        const val TEXT_INSET = 6
     }
 }

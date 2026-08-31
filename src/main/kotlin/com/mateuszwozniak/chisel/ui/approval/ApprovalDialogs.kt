@@ -1,5 +1,6 @@
 package com.mateuszwozniak.chisel.ui.approval
 
+import com.google.gson.JsonObject
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.Project
@@ -7,6 +8,7 @@ import com.intellij.openapi.ui.DialogWrapper
 import com.mateuszwozniak.chisel.model.AgentMode
 import com.mateuszwozniak.chisel.protocol.PermissionDecision
 import com.mateuszwozniak.chisel.protocol.PermissionRequest
+import com.mateuszwozniak.chisel.protocol.UserQuestion
 import com.mateuszwozniak.chisel.protocol.WriteToolInput
 import com.mateuszwozniak.chisel.protocol.string
 import com.mateuszwozniak.chisel.service.ConversationController
@@ -28,6 +30,11 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
     ) {
         if (request.toolName == EXIT_PLAN_MODE) {
             showPlan(controller, request, respond)
+            return
+        }
+        val questions = UserQuestion.parse(request.toolName, request.input)
+        if (questions != null) {
+            showQuestions(request, questions, respond)
             return
         }
         val writeInput = WriteToolInput.parse(request.toolName, request.input)
@@ -57,7 +64,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
             val decision = withDialog(request.requestId, dialog) {
                 val formatter = FeedbackFormatter(displayPath)
                 when (dialog.outcome) {
-                    EditApprovalDialog.Outcome.ACCEPT -> PermissionDecision.Allow
+                    EditApprovalDialog.Outcome.ACCEPT -> PermissionDecision.Allow()
 
                     EditApprovalDialog.Outcome.FEEDBACK -> PermissionDecision.Deny(
                         formatter.format(dialog.annotations(), dialog.editedContent(), dialog.languageId())
@@ -83,7 +90,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
             )
             val decision = withDialog(request.requestId, dialog) {
                 when (dialog.outcome) {
-                    CommandApprovalDialog.Outcome.ALLOW -> PermissionDecision.Allow
+                    CommandApprovalDialog.Outcome.ALLOW -> PermissionDecision.Allow()
                     CommandApprovalDialog.Outcome.DENY -> PermissionDecision.Deny(
                         dialog.denyReason().ifEmpty { DEFAULT_DENIAL }
                     )
@@ -91,6 +98,31 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
             } ?: return@onEventDispatchThread
             sendDecision(respond, decision)
         }
+    }
+
+    private fun showQuestions(
+        request: PermissionRequest,
+        questions: List<UserQuestion>,
+        respond: (PermissionDecision) -> Unit,
+    ) {
+        onEventDispatchThread {
+            val dialog = QuestionDialog(project, questions)
+            val decision = withDialog(request.requestId, dialog) {
+                val answers = dialog.answers()
+                if (dialog.outcome == QuestionDialog.Outcome.ANSWER && answers.isNotEmpty()) {
+                    PermissionDecision.Allow(answered(request.input, answers))
+                } else {
+                    PermissionDecision.Deny(QUESTION_DENIAL)
+                }
+            } ?: return@onEventDispatchThread
+            sendDecision(respond, decision)
+        }
+    }
+
+    private fun answered(input: JsonObject, answers: Map<String, String>): JsonObject {
+        val collected = JsonObject()
+        answers.forEach { (question, answer) -> collected.addProperty(question, answer) }
+        return input.deepCopy().apply { add("answers", collected) }
     }
 
     private fun showPlan(
@@ -104,7 +136,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
             val outcome = withDialog(request.requestId, dialog) { dialog.outcome }
                 ?: return@onEventDispatchThread
             if (outcome == PlanApprovalDialog.Outcome.IMPLEMENT) {
-                sendDecision(respond, PermissionDecision.Allow)
+                sendDecision(respond, PermissionDecision.Allow())
                 controller.changeMode(AgentMode.IMPLEMENTATION)
                 return@onEventDispatchThread
             }
@@ -152,5 +184,8 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
             "I have not approved this plan yet. Keep refining it and call ExitPlanMode again."
 
         const val DEFAULT_DENIAL = "I did not allow this call. Try a different approach."
+
+        const val QUESTION_DENIAL =
+            "I skipped the question. Pick the approach you think is best and keep going."
     }
 }

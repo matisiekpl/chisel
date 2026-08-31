@@ -15,11 +15,12 @@ class RewindConfirmationDialog(
     project: Project,
     private val files: List<String>,
     private val droppedMessages: Int,
+    private val editing: Boolean,
 ) : DialogWrapper(project, true) {
 
     init {
-        title = "Edit message"
-        setOKButtonText("Edit")
+        title = if (editing) "Edit message" else "Rewind conversation"
+        setOKButtonText(if (editing) "Edit" else "Rewind")
         init()
     }
 
@@ -27,10 +28,10 @@ class RewindConfirmationDialog(
         val panel = JPanel(BorderLayout(0, JBUI.scale(8)))
         panel.preferredSize = Dimension(JBUI.scale(WIDTH), JBUI.scale(HEIGHT))
 
-        val headline = "The message returns to the input for editing. This restores files " +
-            "written by Write, Edit and NotebookEdit, and drops $droppedMessages message(s) " +
-            "from the conversation. Changes made through Bash and edits applied by subagents " +
-            "are not restored."
+        val opening = if (editing) "The message returns to the input for editing. " else ""
+        val headline = opening + "This restores files written by Write, Edit and NotebookEdit, " +
+            "and drops $droppedMessages message(s) from the conversation. Changes made through " +
+            "Bash and edits applied by subagents are not restored."
         panel.add(JBLabel("<html>$headline</html>"), BorderLayout.NORTH)
 
         val label = if (files.isEmpty()) "No tracked file changes to restore"

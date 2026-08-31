@@ -14,6 +14,8 @@ class ConversationEntry : BaseState() {
     var title by string()
     var sessionId by string()
     var mode by string()
+    var model by string()
+    var effort by string()
 }
 
 @Service(Service.Level.PROJECT)

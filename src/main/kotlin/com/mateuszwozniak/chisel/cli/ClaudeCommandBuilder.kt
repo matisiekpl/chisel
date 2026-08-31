@@ -1,8 +1,7 @@
 package com.mateuszwozniak.chisel.cli
 
 import com.intellij.execution.configurations.GeneralCommandLine
-import com.mateuszwozniak.chisel.model.AgentMode
-import com.mateuszwozniak.chisel.state.ChiselSettings
+import com.mateuszwozniak.chisel.model.SessionOptions
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
@@ -11,19 +10,18 @@ class ClaudeCommandBuilder(
     private val workingDirectory: String,
 ) {
 
-    fun build(mode: AgentMode, start: SessionStart): GeneralCommandLine {
+    fun build(options: SessionOptions, start: SessionStart): GeneralCommandLine {
         val commandLine = GeneralCommandLine(executable.toString())
             .withWorkDirectory(workingDirectory)
             .withCharset(StandardCharsets.UTF_8)
             .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
             .withEnvironment(CHECKPOINTING_VARIABLE, "true")
 
-        val settings = ChiselSettings.getInstance()
         commandLine.addParameters(BASE_PARAMETERS)
-        commandLine.addParameters("--permission-mode", mode.permissionMode)
+        commandLine.addParameters("--permission-mode", options.mode.permissionMode)
         commandLine.addParameters("--allowedTools", AUTO_APPROVED_TOOLS)
-        commandLine.addParameters("--model", settings.modelFor(mode).alias)
-        commandLine.addParameters("--effort", settings.effortFor(mode).value)
+        commandLine.addParameters("--model", options.model.alias)
+        commandLine.addParameters("--effort", options.effort.value)
         commandLine.addParameters(sessionParameters(start))
         return commandLine
     }

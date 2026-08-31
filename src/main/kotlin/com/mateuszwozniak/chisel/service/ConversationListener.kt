@@ -1,6 +1,5 @@
 package com.mateuszwozniak.chisel.service
 
-import com.mateuszwozniak.chisel.model.AgentMode
 import com.mateuszwozniak.chisel.model.TodoItem
 import com.mateuszwozniak.chisel.model.TranscriptItem
 
@@ -14,9 +13,9 @@ interface ConversationListener {
 
     fun onTodosChanged(todos: List<TodoItem>) = Unit
 
-    fun onModeChanged(mode: AgentMode) = Unit
-
     fun onBusyChanged(busy: Boolean) = Unit
 
     fun onTitleChanged(title: String) = Unit
+
+    fun onOptionsChanged() = Unit
 }

@@ -1,13 +1,20 @@
 package com.mateuszwozniak.chisel.ui
 
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.panels.VerticalLayout
 import com.intellij.util.ui.AsyncProcessIcon
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
@@ -17,21 +24,21 @@ import com.mateuszwozniak.chisel.model.TranscriptItem
 import com.mateuszwozniak.chisel.service.ConversationController
 import com.mateuszwozniak.chisel.service.ConversationListener
 import java.awt.BorderLayout
-import java.awt.Dimension
+import java.awt.Component
 import java.awt.FlowLayout
-import java.awt.Rectangle
+import java.awt.datatransfer.StringSelection
+import javax.swing.Icon
 import javax.swing.JPanel
-import javax.swing.Scrollable
 import javax.swing.SwingUtilities
 
 class TranscriptPanel(
     private val project: Project,
     private val controller: ConversationController,
-    private val onRewindRequested: (String) -> Unit,
+    private val onRewindRequested: (String, Boolean) -> Unit,
 ) : JPanel(BorderLayout()), ConversationListener, Disposable {
 
     private val html = TranscriptHtml(MarkdownRenderer(project), project.basePath)
-    private val list = ItemList()
+    private val list = VerticalList(LIST_GAP)
     private val scroll = ScrollPaneFactory.createScrollPane(list, true)
     private val views = LinkedHashMap<String, TranscriptItemView>()
     private val queue = MergingUpdateQueue("ChiselTranscript", MERGE_MILLIS, true, list, this)
@@ -43,7 +50,7 @@ class TranscriptPanel(
     init {
         list.isOpaque = false
         busyBar.isOpaque = false
-        busyBar.border = JBUI.Borders.empty(0, 18, 4, 18)
+        busyBar.border = JBUI.Borders.empty(8, 12, 10, 12)
         busyBar.add(busyIcon)
         busyBar.add(JBLabel("Working…").apply { foreground = UIUtil.getContextHelpForeground() })
         busyBar.isVisible = false
@@ -107,20 +114,58 @@ class TranscriptPanel(
     }
 
     private fun addView(item: TranscriptItem) {
-        if (item is TranscriptItem.TurnSummary) return
+        if (item is TranscriptItem.TurnSummary || item is TranscriptItem.Thinking) return
         val view = TranscriptItemView(html, item, contentDisposable)
         when (item) {
-            is TranscriptItem.UserPrompt -> view.onClicked { item.messageUuid?.let(onRewindRequested) }
-            is TranscriptItem.Thinking -> view.onClicked { showDetail("Thinking", item) }
-            is TranscriptItem.ToolCall -> view.onClicked { showDetail(item.name, item) }
+            is TranscriptItem.UserPrompt -> {
+                view.onClicked { item.messageUuid?.let { onRewindRequested(it, true) } }
+                view.onContextMenu { component, x, y -> showPromptMenu(item, component, x, y) }
+            }
+            is TranscriptItem.ToolCall -> view.onClicked { showDetail(item) }
             else -> Unit
         }
         views[item.id] = view
         list.add(view)
     }
 
-    private fun showDetail(title: String, item: TranscriptItem) {
-        TranscriptDetailDialog(project, title, html.detail(item)).show()
+    private fun showPromptMenu(
+        item: TranscriptItem.UserPrompt,
+        component: Component,
+        x: Int,
+        y: Int,
+    ) {
+        val rewindable = item.messageUuid != null
+        val actions = DefaultActionGroup(
+            action("Copy", AllIcons.Actions.Copy, true) {
+                CopyPasteManager.getInstance().setContents(StringSelection(item.text))
+            },
+            action("Edit", AllIcons.Actions.Edit, rewindable) {
+                item.messageUuid?.let { onRewindRequested(it, true) }
+            },
+            action("Rewind", AllIcons.Actions.Rollback, rewindable) {
+                item.messageUuid?.let { onRewindRequested(it, false) }
+            },
+        )
+        ActionManager.getInstance()
+            .createActionPopupMenu(PLACE, actions)
+            .component
+            .show(component, x, y)
+    }
+
+    private fun action(text: String, icon: Icon, enabled: Boolean, run: () -> Unit): AnAction =
+        object : AnAction(text, null, icon), DumbAware {
+
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+            override fun update(event: AnActionEvent) {
+                event.presentation.isEnabled = enabled
+            }
+
+            override fun actionPerformed(event: AnActionEvent) = run()
+        }
+
+    private fun showDetail(item: TranscriptItem.ToolCall) {
+        TranscriptDetailDialog(project, item.name, html.detail(item)).show()
     }
 
     private fun mutate(action: () -> Unit) {
@@ -141,26 +186,9 @@ class TranscriptPanel(
         bar.value = bar.maximum
     }
 
-    private class ItemList : JPanel(VerticalLayout(JBUI.scale(6))), Scrollable {
-
-        override fun getPreferredScrollableViewportSize(): Dimension = preferredSize
-
-        override fun getScrollableUnitIncrement(visible: Rectangle, orientation: Int, direction: Int): Int =
-            JBUI.scale(UNIT_INCREMENT)
-
-        override fun getScrollableBlockIncrement(visible: Rectangle, orientation: Int, direction: Int): Int =
-            visible.height
-
-        override fun getScrollableTracksViewportWidth(): Boolean = true
-
-        override fun getScrollableTracksViewportHeight(): Boolean = false
-
-        private companion object {
-            const val UNIT_INCREMENT = 16
-        }
-    }
-
     private companion object {
+        const val PLACE = "ChiselTranscript"
+        const val LIST_GAP = 6
         const val MERGE_MILLIS = 50
         const val BOTTOM_TOLERANCE = 24
     }

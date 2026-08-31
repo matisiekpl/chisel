@@ -5,7 +5,6 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-import com.mateuszwozniak.chisel.model.AgentMode
 import com.mateuszwozniak.chisel.model.TodoItem
 import com.mateuszwozniak.chisel.service.ConversationController
 import com.mateuszwozniak.chisel.service.ConversationListener
@@ -19,12 +18,14 @@ class ConversationPanel(
     private val controller: ConversationController,
 ) : JPanel(BorderLayout()), ConversationListener, Disposable {
 
-    private val transcript = TranscriptPanel(project, controller) { requestRewind(it) }
+    private val transcript = TranscriptPanel(project, controller) { messageUuid, restorePrompt ->
+        requestRewind(messageUuid, restorePrompt)
+    }
     private val todoPanel = TodoPanel()
-    private val modeToggle = ModeToggle(controller.conversation.mode) { controller.changeMode(it) }
+    private val options = OptionsBar(controller)
     private val input = PromptInput(
         project,
-        modeToggle,
+        options,
         { controller.sendPrompt(it) },
         { controller.interrupt() },
     )
@@ -46,8 +47,8 @@ class ConversationPanel(
         todoPanel.update(todos)
     }
 
-    override fun onModeChanged(mode: AgentMode) = onEventDispatchThread {
-        modeToggle.show(mode)
+    override fun onOptionsChanged() = onEventDispatchThread {
+        options.refresh()
     }
 
     override fun onBusyChanged(busy: Boolean) = onEventDispatchThread {
@@ -62,14 +63,14 @@ class ConversationPanel(
         controller.removeListener(this)
     }
 
-    private fun requestRewind(messageUuid: String) {
+    private fun requestRewind(messageUuid: String, restorePrompt: Boolean) {
         val files = controller.filesTouchedAfter(messageUuid)
             .map { ProjectPaths.relative(project.basePath, it) }
         val dropped = controller.messagesDroppedAfter(messageUuid)
-        if (!RewindConfirmationDialog(project, files, dropped).showAndGet()) return
+        if (!RewindConfirmationDialog(project, files, dropped, restorePrompt).showAndGet()) return
         controller.rewind(messageUuid) { promptText ->
             onEventDispatchThread {
-                promptText?.let { input.text = it }
+                if (restorePrompt) promptText?.let { input.text = it }
                 input.requestFocusOnField()
             }
         }

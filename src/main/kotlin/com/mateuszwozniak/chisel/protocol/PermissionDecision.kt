@@ -6,9 +6,10 @@ sealed interface PermissionDecision {
 
     fun toJson(): JsonObject
 
-    data object Allow : PermissionDecision {
+    data class Allow(val updatedInput: JsonObject? = null) : PermissionDecision {
         override fun toJson(): JsonObject = JsonObject().apply {
             addProperty("behavior", "allow")
+            updatedInput?.let { add("updatedInput", it) }
         }
     }
 
