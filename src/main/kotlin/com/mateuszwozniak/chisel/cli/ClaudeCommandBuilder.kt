@@ -1,6 +1,7 @@
 package com.mateuszwozniak.chisel.cli
 
 import com.intellij.execution.configurations.GeneralCommandLine
+import com.mateuszwozniak.chisel.model.AgentMode
 import com.mateuszwozniak.chisel.model.SessionOptions
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
@@ -22,6 +23,9 @@ class ClaudeCommandBuilder(
         commandLine.addParameters("--allowedTools", AUTO_APPROVED_TOOLS)
         commandLine.addParameters("--model", options.model.alias)
         commandLine.addParameters("--effort", options.effort.value)
+        if (options.mode == AgentMode.IMPLEMENTATION) {
+            commandLine.addParameters("--append-system-prompt", READABLE_COMMANDS)
+        }
         if (options.effort.ultracode) {
             commandLine.addParameters("--settings", ULTRACODE_SETTINGS)
         }
@@ -41,6 +45,18 @@ class ClaudeCommandBuilder(
         const val CHECKPOINTING_VARIABLE = "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING"
 
         private const val ULTRACODE_SETTINGS = "{\"ultracode\":true}"
+
+        private const val READABLE_COMMANDS =
+            "A developer reads every shell command you run, in a review dialog, before approving it. " +
+                "Write commands so that reading one tells them exactly what will happen.\n" +
+                "- Run one command per step, each doing a single thing. Do not chain unrelated work " +
+                "with && or ; into a single call.\n" +
+                "- Prefer a plain, obvious command over a clever one-liner. Split long pipelines into " +
+                "separate calls when the intermediate result is worth seeing.\n" +
+                "- Use long option names where they make the intent clearer.\n" +
+                "- Give every Bash call a description that says what it does in plain words.\n" +
+                "This applies to how you write commands, not to how much you get done: keep working " +
+                "through the task, just in steps a reader can follow."
 
         private const val AUTO_APPROVED_TOOLS =
             "Read,Glob,Grep,WebFetch,WebSearch,TodoWrite,Task"

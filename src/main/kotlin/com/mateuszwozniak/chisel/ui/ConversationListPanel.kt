@@ -80,6 +80,7 @@ class ConversationListPanel(private val project: Project) :
         tree.selectionModel.selectionMode = TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION
         tree.cellRenderer = ConversationTreeRenderer()
         tree.emptyText.text = "No conversations"
+        tree.toolTipText = ""
         tree.border = JBUI.Borders.empty(4, 8, 0, 0)
         tree.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(event: MouseEvent) {
@@ -240,16 +241,24 @@ class ConversationListPanel(private val project: Project) :
             when (val node = (value as? DefaultMutableTreeNode)?.userObject) {
                 is ConversationController -> {
                     icon = AllIcons.General.Balloon
-                    append(node.conversation.title)
+                    append(shorten(node.conversation.title))
+                    toolTipText = node.conversation.title
                 }
 
                 is String -> append(node, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
             }
+        }
+
+        private fun shorten(title: String): String {
+            val line = title.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+            if (line.length <= TITLE_LIMIT) return line
+            return line.take(TITLE_LIMIT).trimEnd() + "…"
         }
     }
 
     private companion object {
         const val PLACE = "ChiselConversationList"
         const val GROUP_LABEL = "Conversations"
+        const val TITLE_LIMIT = 36
     }
 }
