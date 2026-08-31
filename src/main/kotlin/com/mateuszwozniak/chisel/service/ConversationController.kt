@@ -16,6 +16,7 @@ import com.mateuszwozniak.chisel.model.AgentModel
 import com.mateuszwozniak.chisel.model.AgentTask
 import com.mateuszwozniak.chisel.model.EffortLevel
 import com.mateuszwozniak.chisel.model.PromptAttachment
+import com.mateuszwozniak.chisel.model.PlanTask
 import com.mateuszwozniak.chisel.model.QueuedPrompt
 import com.mateuszwozniak.chisel.model.ContextUsage
 import com.mateuszwozniak.chisel.model.Conversation
@@ -347,10 +348,34 @@ class ConversationController(
     }
 
     private fun appendToolCall(block: ContentBlock.ToolUse, parentToolUseId: String?) {
+        if (block.name in PlanTask.TOOLS) {
+            applyPlanTask(block.name, block.input)
+            return
+        }
         val call = TranscriptItem.ToolCall(nextId(), block.id, block.name, block.input, parentToolUseId)
         synchronized(this) { toolCalls[block.id] = call }
         appendItem(call)
         if (block.name == TODO_TOOL) applyTodos(block.input)
+    }
+
+    private fun applyPlanTask(toolName: String, input: JsonObject) {
+        when (toolName) {
+            PlanTask.CREATE_TOOL -> conversation.planTasks.add(
+                PlanTask(
+                    (conversation.planTasks.size + 1).toString(),
+                    input.string("subject") ?: input.string("description").orEmpty(),
+                    input.string("description").orEmpty(),
+                )
+            )
+
+            PlanTask.UPDATE_TOOL -> {
+                val task = conversation.planTasks.firstOrNull { it.id == input.string("taskId") } ?: return
+                task.status = TodoStatus.fromWireName(input.string("status"))
+            }
+
+            else -> return
+        }
+        listeners.forEach { it.onPlanTasksChanged() }
     }
 
     private fun applyUserTurn(event: StreamEvent.UserTurn) {

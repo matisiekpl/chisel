@@ -21,6 +21,8 @@ class Conversation(
 
     val tasks: MutableList<AgentTask> = CopyOnWriteArrayList()
 
+    val planTasks: MutableList<PlanTask> = CopyOnWriteArrayList()
+
     var titleLocked: Boolean = false
 
     var updatedAt: Long = System.currentTimeMillis()

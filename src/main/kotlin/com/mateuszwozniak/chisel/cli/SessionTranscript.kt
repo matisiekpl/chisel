@@ -2,6 +2,7 @@ package com.mateuszwozniak.chisel.cli
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.mateuszwozniak.chisel.model.PlanTask
 import com.mateuszwozniak.chisel.model.TranscriptItem
 import com.mateuszwozniak.chisel.protocol.ContentBlock
 import com.mateuszwozniak.chisel.protocol.bool
@@ -61,6 +62,7 @@ class SessionTranscript(private val file: Path) {
                 is ContentBlock.Text -> items.add(TranscriptItem.AssistantText(nextId(), block.text, parent))
 
                 is ContentBlock.ToolUse -> {
+                    if (block.name in PlanTask.TOOLS) return@forEach
                     val call = TranscriptItem.ToolCall(nextId(), block.id, block.name, block.input, parent)
                     toolCalls[block.id] = call
                     items.add(call)

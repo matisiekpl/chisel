@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.mateuszwozniak"
-version = "0.3.0"
+version = "0.4.0"
 
 dependencies {
     intellijPlatform {
@@ -48,8 +48,10 @@ intellijPlatform {
 
         changeNotes = """
             <ul>
+              <li>Tasks the agent creates appear in their own tool window on the left, with a live status, and no longer flood the transcript.</li>
               <li>MCP tools run without an approval dialog in Plan mode, switchable in Settings | Tools | Chisel.</li>
               <li>The prompt input paints one surface: the editor area no longer sits as a lighter box inside the card.</li>
+              <li>The token counter reports every token sent, cached prefixes included.</li>
             </ul>
         """.trimIndent()
         vendor {

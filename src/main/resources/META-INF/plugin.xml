@@ -9,6 +9,10 @@
                     anchor="right"
                     icon="/icons/chisel.svg"
                     canCloseContents="true"/>
+        <toolWindow id="Tasks"
+                    factoryClass="com.mateuszwozniak.chisel.ui.TasksToolWindowFactory"
+                    anchor="left"
+                    icon="/icons/tasks.svg"/>
         <toolWindow id="Conversations"
                     factoryClass="com.mateuszwozniak.chisel.ui.ConversationListToolWindowFactory"
                     anchor="left"

@@ -52,7 +52,8 @@ class ConversationToolbar(
         usageLabel.text = "\u2193 " + tokens(conversation.inputTokens) +
             "   \u2191 " + tokens(conversation.outputTokens) +
             "   " + cost(conversation.costUsd)
-        usageLabel.toolTipText = "Tokens sent and received in this conversation, and its total cost"
+        usageLabel.toolTipText =
+            "Tokens sent, including cached prefixes, and received in this conversation, and its total cost"
         usageLabel.isVisible = true
     }
 

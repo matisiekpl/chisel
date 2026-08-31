@@ -19,6 +19,12 @@ class StreamJsonCodec {
 
     private companion object {
         const val COMPACTING = "compacting"
+
+        val INPUT_FIELDS = listOf(
+            "input_tokens",
+            "cache_creation_input_tokens",
+            "cache_read_input_tokens",
+        )
     }
 
     private val gson = Gson()
@@ -209,12 +215,15 @@ class StreamJsonCodec {
         }
     }
 
+    private fun sentTokens(usage: JsonObject): Long =
+        INPUT_FIELDS.sumOf { usage.number(it)?.toLong() ?: 0 }
+
     private fun parseResult(root: JsonObject): StreamEvent {
         val usage = root.obj("usage")
         return StreamEvent.TurnFinished(
             subtype = root.string("subtype").orEmpty(),
             costUsd = root.number("total_cost_usd"),
-            inputTokens = usage?.number("input_tokens")?.toLong(),
+            inputTokens = usage?.let(::sentTokens),
             outputTokens = usage?.number("output_tokens")?.toLong(),
             errorText = if (root.bool("is_error")) root.string("result") else null,
         )

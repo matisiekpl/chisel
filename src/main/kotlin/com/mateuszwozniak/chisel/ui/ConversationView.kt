@@ -12,9 +12,20 @@ import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
 import com.mateuszwozniak.chisel.service.ConversationController
+import java.util.concurrent.CopyOnWriteArrayList
+
+fun interface ShownConversationListener {
+
+    fun onConversationShown(controller: ConversationController)
+}
 
 @Service(Service.Level.PROJECT)
 class ConversationView(private val project: Project) : Disposable {
+
+    private val shownListeners = CopyOnWriteArrayList<ShownConversationListener>()
+
+    var shown: ConversationController? = null
+        private set
 
     private val panels = object : LinkedHashMap<String, ConversationPanel>(CACHE_SIZE, LOAD_FACTOR, true) {
 
@@ -32,10 +43,11 @@ class ConversationView(private val project: Project) : Disposable {
 
     fun show(toolWindow: ToolWindow, controller: ConversationController) {
         val contentManager = toolWindow.contentManager
-        val shown = contentManager.contents.firstOrNull { it.getUserData(CONTROLLER) === controller }
-        if (shown != null) {
-            contentManager.setSelectedContent(shown)
-            focusInput(shown)
+        val existing = contentManager.contents.firstOrNull { it.getUserData(CONTROLLER) === controller }
+        if (existing != null) {
+            contentManager.setSelectedContent(existing)
+            focusInput(existing)
+            announce(controller)
             return
         }
         val panel = panels.getOrPut(controller.conversation.id) { ConversationPanel(project, controller) }
@@ -49,6 +61,21 @@ class ConversationView(private val project: Project) : Disposable {
         contentManager.setSelectedContent(content)
         replaced.forEach { contentManager.removeContent(it, false) }
         focusInput(content)
+        announce(controller)
+    }
+
+    fun addShownListener(listener: ShownConversationListener) {
+        shownListeners.add(listener)
+        shown?.let { listener.onConversationShown(it) }
+    }
+
+    fun removeShownListener(listener: ShownConversationListener) {
+        shownListeners.remove(listener)
+    }
+
+    private fun announce(controller: ConversationController) {
+        shown = controller
+        shownListeners.forEach { it.onConversationShown(controller) }
     }
 
     fun close(controller: ConversationController) {
@@ -77,6 +104,7 @@ class ConversationView(private val project: Project) : Disposable {
     override fun dispose() {
         panels.values.forEach { Disposer.dispose(it) }
         panels.clear()
+        shownListeners.clear()
     }
 
     private fun focusInput(content: Content) {

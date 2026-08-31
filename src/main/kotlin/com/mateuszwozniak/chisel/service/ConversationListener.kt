@@ -26,6 +26,8 @@ interface ConversationListener {
 
     fun onTasksChanged() = Unit
 
+    fun onPlanTasksChanged() = Unit
+
     fun onContextChanged() = Unit
 
     fun onUsageChanged() = Unit

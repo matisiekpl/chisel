@@ -6,6 +6,7 @@ import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.util.ui.JBUI
 import com.mateuszwozniak.chisel.model.QueuedPrompt
 import com.mateuszwozniak.chisel.model.TodoItem
@@ -26,6 +27,7 @@ class ConversationPanel(
 
     private var agentsDialog: AgentsDialog? = null
     private var dismissedAgents = false
+    private var tasksShown = false
     private val transcript = TranscriptPanel(project, controller) { messageUuid, restorePrompt ->
         requestRewind(messageUuid, restorePrompt)
     }
@@ -77,6 +79,8 @@ class ConversationPanel(
 
     override fun onTasksChanged() = onEventDispatchThread { syncAgents() }
 
+    override fun onPlanTasksChanged() = onEventDispatchThread { showTasks() }
+
     override fun onUsageChanged() = onEventDispatchThread { toolbar.showUsage() }
 
     override fun onRemoteChanged() = onEventDispatchThread { toolbar.showRemote() }
@@ -94,6 +98,12 @@ class ConversationPanel(
     }
 
     val focusTarget: JComponent get() = input.focusTarget
+
+    private fun showTasks() {
+        if (tasksShown || controller.conversation.planTasks.isEmpty()) return
+        tasksShown = true
+        ToolWindowManager.getInstance(project).getToolWindow(TasksPanel.TOOL_WINDOW_ID)?.show()
+    }
 
     private fun syncAgents() {
         val running = controller.conversation.tasks.any { !it.finished }
