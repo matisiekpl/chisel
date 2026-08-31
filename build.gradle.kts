@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.mateuszwozniak"
-version = "0.1.0"
+version = "0.2.0"
 
 dependencies {
     intellijPlatform {
@@ -48,7 +48,10 @@ intellijPlatform {
 
         changeNotes = """
             <ul>
-              <li>First release.</li>
+              <li>The conversation panel shows one conversation at a time instead of stacking tool window tabs.</li>
+              <li>In IDEs with the Database plugin, the schema of a data source attaches to a prompt as DDL.</li>
+              <li>Every conversation started in the terminal is picked up, titled by its first real prompt.</li>
+              <li>Changing the model or the effort level no longer reports a failed process.</li>
             </ul>
         """.trimIndent()
         vendor {

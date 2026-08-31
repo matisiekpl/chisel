@@ -5,3 +5,4 @@ out/
 *.iml
 .intellijPlatform/
 .kotlin/
+.DS_Store
