@@ -104,6 +104,14 @@ class PromptInput(
 
     private val attachments = AttachmentBar(project)
 
+    private val schema = SchemaAttachment(project) { attachments.attach(it) }
+
+    private val schemaButton = InplaceButton(
+        "Attach database schema",
+        AllIcons.Nodes.DataTables,
+        ActionListener { chooseSchema() },
+    )
+
     private val queue = QueueBar { prompt -> onQueueRemove(prompt) }
 
     private val card = Card()
@@ -161,6 +169,7 @@ class PromptInput(
         sendButton.preferredSize = Dimension(JBUI.scale(BUTTON_SIZE), JBUI.scale(BUTTON_SIZE))
         stopButton.preferredSize = Dimension(JBUI.scale(BUTTON_SIZE), JBUI.scale(BUTTON_SIZE))
         attachButton.preferredSize = Dimension(JBUI.scale(BUTTON_SIZE), JBUI.scale(BUTTON_SIZE))
+        schemaButton.preferredSize = Dimension(JBUI.scale(BUTTON_SIZE), JBUI.scale(BUTTON_SIZE))
         promptField.addFocusListener(object : FocusAdapter() {
             override fun focusGained(event: FocusEvent) = card.showFocused(true)
 
@@ -234,6 +243,7 @@ class PromptInput(
         right.isOpaque = false
         right.border = JBUI.Borders.emptyRight(TEXT_INSET)
         right.add(contextMeter)
+        if (schema.available) right.add(schemaButton)
         right.add(attachButton)
         right.add(stopButton)
         right.add(sendButton)
@@ -373,6 +383,10 @@ class PromptInput(
     private fun installDropTarget() {
         DropTarget(this, DnDConstants.ACTION_COPY, dropListener, true)
         DropTarget(card, DnDConstants.ACTION_COPY, dropListener, true)
+    }
+
+    private fun chooseSchema() {
+        schema.choose(schemaButton)
     }
 
     private fun chooseFiles() {

@@ -26,7 +26,6 @@ object ClaudeSessions {
                     .map { read(it) }
                     .filterNotNull()
                     .sortedByDescending { it.modifiedAt }
-                    .take(LIMIT)
                     .toList()
             }
         }.getOrDefault(emptyList())
@@ -98,8 +97,6 @@ object ClaudeSessions {
     }
 
     private const val SUFFIX = ".jsonl"
-
-    private const val LIMIT = 30
 
     private const val SCAN_LINES = 200L
 }

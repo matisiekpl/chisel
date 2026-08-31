@@ -1,6 +1,7 @@
 package com.mateuszwozniak.chisel.ui
 
 import com.google.gson.JsonObject
+import com.mateuszwozniak.chisel.model.PromptAttachment
 import com.mateuszwozniak.chisel.model.TranscriptItem
 import com.mateuszwozniak.chisel.protocol.string
 import com.mateuszwozniak.chisel.util.ProjectPaths
@@ -41,14 +42,30 @@ class TranscriptHtml(private val renderer: MarkdownRenderer, private val basePat
     private fun userPrompt(item: TranscriptItem.UserPrompt): String {
         val body = "<div>" + escape(item.text).replace("\n", "<br>") + "</div>"
         if (item.attachments.isEmpty()) return body
-        val images = item.attachments.joinToString("") { path ->
+        val (images, files) = item.attachments.partition { PromptAttachment.isImage(it) }
+        return body + thumbnails(images) + fileLinks(files)
+    }
+
+    private fun thumbnails(paths: List<String>): String {
+        if (paths.isEmpty()) return ""
+        val images = paths.joinToString("") { path ->
             val uri = Paths.get(path).toUri().toString()
             val name = escape(Paths.get(path).fileName.toString())
             "<a href=\"" + uri + "\" style=\"text-decoration:none\">" +
                 "<img src=\"" + uri + "\" alt=\"" + name + "\" border=\"0\" width=\"" +
                 THUMBNAIL_WIDTH + "\"></a>"
         }
-        return body + "<div>" + images + "</div>"
+        return "<div>" + images + "</div>"
+    }
+
+    private fun fileLinks(paths: List<String>): String {
+        if (paths.isEmpty()) return ""
+        val links = paths.joinToString(" · ") { path ->
+            val uri = Paths.get(path).toUri().toString()
+            val name = escape(Paths.get(path).fileName.toString())
+            "<a href=\"" + uri + "\">" + name + "</a>"
+        }
+        return "<div>" + links + "</div>"
     }
 
     private fun toolDetail(item: TranscriptItem.ToolCall): String {

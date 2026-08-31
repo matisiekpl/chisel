@@ -65,7 +65,6 @@ class ConversationManager(private val project: Project) : Disposable {
         val settings = ChiselSettings.getInstance()
         ClaudeSessions.list(project.basePath)
             .filterNot { it.id in known }
-            .take(IMPORT_LIMIT)
             .forEach { session ->
                 val transcript = ClaudeSessions.transcriptOf(project.basePath, session.id)
                 if (transcript.isEmpty()) return@forEach
@@ -192,8 +191,6 @@ class ConversationManager(private val project: Project) : Disposable {
     companion object {
 
         private const val NEW_TITLE = "New chat"
-
-        private const val IMPORT_LIMIT = 15
 
         fun getInstance(project: Project): ConversationManager = project.service()
     }

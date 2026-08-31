@@ -1,0 +1,7 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationService
+                serviceInterface="com.mateuszwozniak.chisel.db.SchemaProvider"
+                serviceImplementation="com.mateuszwozniak.chisel.db.DatabaseSchemaProvider"/>
+    </extensions>
+</idea-plugin>

@@ -1,16 +1,13 @@
 package com.mateuszwozniak.chisel.ui
 
-import com.intellij.openapi.application.PathManager
 import com.intellij.util.ui.ImageUtil
 import com.mateuszwozniak.chisel.model.PromptAttachment
+import com.mateuszwozniak.chisel.util.ChiselPaths
 import java.awt.Image
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
 import java.awt.image.BufferedImage
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
 import java.util.UUID
 import javax.imageio.ImageIO
 
@@ -46,13 +43,9 @@ object AttachmentTransfer {
     }
 
     private fun store(image: BufferedImage): PromptAttachment? = runCatching {
-        val directory = cacheDirectory()
-        Files.createDirectories(directory)
+        val directory = ChiselPaths.images() ?: return null
         val file = directory.resolve(UUID.randomUUID().toString() + ".png")
         ImageIO.write(image, "png", file.toFile())
         PromptAttachment.of(file)
     }.getOrNull()
-
-    private fun cacheDirectory(): Path =
-        Paths.get(PathManager.getSystemPath(), "chisel", "images")
 }

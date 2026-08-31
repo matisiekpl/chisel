@@ -27,8 +27,12 @@ data class PromptAttachment(val path: String, val mediaType: String?) {
 
         fun of(path: Path): PromptAttachment? {
             if (!Files.isReadable(path) || Files.isDirectory(path)) return null
-            val extension = path.fileName.toString().substringAfterLast('.', "").lowercase()
-            return PromptAttachment(path.toString(), MEDIA_TYPES[extension])
+            return PromptAttachment(path.toString(), mediaTypeOf(path.fileName.toString()))
         }
+
+        fun isImage(path: String): Boolean = mediaTypeOf(Paths.get(path).fileName.toString()) != null
+
+        private fun mediaTypeOf(name: String): String? =
+            MEDIA_TYPES[name.substringAfterLast('.', "").lowercase()]
     }
 }

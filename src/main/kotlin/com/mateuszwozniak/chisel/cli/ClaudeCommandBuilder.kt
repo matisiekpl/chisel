@@ -3,6 +3,7 @@ package com.mateuszwozniak.chisel.cli
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.mateuszwozniak.chisel.model.AgentMode
 import com.mateuszwozniak.chisel.model.SessionOptions
+import com.mateuszwozniak.chisel.util.ChiselPaths
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
@@ -19,6 +20,7 @@ class ClaudeCommandBuilder(
             .withEnvironment(CHECKPOINTING_VARIABLE, "true")
 
         commandLine.addParameters(BASE_PARAMETERS)
+        ChiselPaths.ensureRoot()?.let { commandLine.addParameters("--add-dir", it.toString()) }
         commandLine.addParameters("--permission-mode", options.mode.permissionMode)
         commandLine.addParameters("--allowedTools", AUTO_APPROVED_TOOLS)
         commandLine.addParameters("--model", options.model.alias)
