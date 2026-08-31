@@ -214,9 +214,9 @@ class ConversationController(
         }
     }
 
-    override fun onTerminated(exitCode: Int) {
+    override fun onTerminated(exitCode: Int, stopped: Boolean) {
         changeBusy(false)
-        if (exitCode == 0) return
+        if (stopped || exitCode == 0) return
         val details = synchronized(standardError) { standardError.toString().trim() }
         appendNotice("Claude Code exited with code $exitCode. $details".trim(), true)
     }

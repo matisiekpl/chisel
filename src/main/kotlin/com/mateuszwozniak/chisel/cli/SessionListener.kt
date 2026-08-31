@@ -14,5 +14,5 @@ interface SessionListener {
 
     fun onStandardError(text: String)
 
-    fun onTerminated(exitCode: Int)
+    fun onTerminated(exitCode: Int, stopped: Boolean)
 }

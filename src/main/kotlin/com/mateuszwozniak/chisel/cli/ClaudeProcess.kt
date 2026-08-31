@@ -15,13 +15,16 @@ class ClaudeProcess(
     commandLine: GeneralCommandLine,
     private val onLine: (String) -> Unit,
     private val onStandardError: (String) -> Unit,
-    private val onTerminated: (Int) -> Unit,
+    private val onTerminated: (Int, Boolean) -> Unit,
 ) : Disposable {
 
     private val handler = object : KillableProcessHandler(commandLine) {
         override fun readerOptions(): BaseOutputReader.Options =
             BaseOutputReader.Options.forMostlySilentProcess()
     }.apply { setShouldDestroyProcessRecursively(true) }
+
+    @Volatile
+    private var stopped = false
 
     private val readLock = Any()
     private val writeLock = Any()
@@ -39,7 +42,7 @@ class ClaudeProcess(
             }
 
             override fun processTerminated(event: ProcessEvent) {
-                onTerminated(event.exitCode)
+                onTerminated(event.exitCode, stopped)
             }
         })
         handler.startNotify()
@@ -56,6 +59,7 @@ class ClaudeProcess(
     fun isRunning(): Boolean = !handler.isProcessTerminated
 
     override fun dispose() {
+        stopped = true
         handler.destroyProcess()
     }
 

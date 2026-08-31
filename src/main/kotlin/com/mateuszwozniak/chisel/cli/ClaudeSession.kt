@@ -105,9 +105,9 @@ class ClaudeSession(
         }
     }
 
-    private fun handleTerminated(exitCode: Int) {
+    private fun handleTerminated(exitCode: Int, stopped: Boolean) {
         control?.failAll("process terminated with exit code $exitCode")
-        listener.onTerminated(exitCode)
+        listener.onTerminated(exitCode, stopped)
     }
 
     private companion object {

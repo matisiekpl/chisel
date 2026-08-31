@@ -2,6 +2,7 @@ package com.mateuszwozniak.chisel.service
 
 import com.intellij.ide.SaveAndSyncHandler
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
@@ -11,6 +12,8 @@ import com.mateuszwozniak.chisel.model.AgentMode
 import com.mateuszwozniak.chisel.model.AgentModel
 import com.mateuszwozniak.chisel.model.Conversation
 import com.mateuszwozniak.chisel.model.EffortLevel
+import com.mateuszwozniak.chisel.model.TerminalSession
+import com.mateuszwozniak.chisel.model.TranscriptItem
 import com.mateuszwozniak.chisel.state.ChiselSettings
 import com.mateuszwozniak.chisel.state.ConversationEntry
 import com.mateuszwozniak.chisel.state.ConversationState
@@ -53,8 +56,8 @@ class ConversationManager(private val project: Project) : Disposable {
             entry.updatedAt.takeIf { it > 0 }?.let { conversation.updatedAt = it }
             register(conversation)
         }
-        importTerminalSessions()
         if (controllers.isEmpty()) create()
+        importTerminalSessions()
         return conversations()
     }
 
@@ -64,29 +67,47 @@ class ConversationManager(private val project: Project) : Disposable {
             ?: nextTitle()
 
     private fun importTerminalSessions() {
-        val state = ConversationState.getInstance(project).state
-        val known = controllers.values.mapNotNull { it.conversation.sessionId }.toSet() +
-            state.dismissedSessions.toSet()
-        val settings = ChiselSettings.getInstance()
-        ClaudeSessions.list(project.basePath)
-            .filterNot { it.id in known }
-            .forEach { session ->
-                val transcript = ClaudeSessions.transcriptOf(project.basePath, session.id)
-                if (transcript.isEmpty()) return@forEach
-                val mode = settings.defaultMode
-                val conversation = Conversation(
-                    UUID.randomUUID().toString(),
-                    session.title,
-                    mode,
-                    settings.modelFor(mode),
-                    settings.effortFor(mode),
-                    session.id,
-                )
-                conversation.transcript.addAll(transcript)
-                conversation.updatedAt = session.modifiedAt.toEpochMilli()
-                register(conversation)
-            }
+        val known = knownSessions()
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val read = ClaudeSessions.list(project.basePath)
+                .filterNot { it.id in known }
+                .map { it to ClaudeSessions.transcriptOf(project.basePath, it.id) }
+                .filter { it.second.isNotEmpty() }
+            if (read.isEmpty()) return@executeOnPooledThread
+            ApplicationManager.getApplication().invokeLater({ adopt(read) }, project.disposed)
+        }
     }
+
+    private fun adopt(sessions: List<Pair<TerminalSession, List<TranscriptItem>>>) {
+        val known = knownSessions()
+        val settings = ChiselSettings.getInstance()
+        val imported = sessions.filterNot { it.first.id in known }
+        if (imported.isEmpty()) return
+        val adopted = imported.map { (session, transcript) ->
+            val mode = settings.defaultMode
+            val conversation = Conversation(
+                UUID.randomUUID().toString(),
+                session.title,
+                mode,
+                settings.modelFor(mode),
+                settings.effortFor(mode),
+                session.id,
+            )
+            conversation.transcript.addAll(transcript)
+            conversation.updatedAt = session.modifiedAt.toEpochMilli()
+            register(conversation)
+            conversation
+        }
+        persist()
+        notifyChanged()
+        ApplicationManager.getApplication().executeOnPooledThread {
+            adopted.forEach { store.save(it) }
+        }
+    }
+
+    private fun knownSessions(): Set<String> =
+        controllers.values.mapNotNull { it.conversation.sessionId }.toSet() +
+            ConversationState.getInstance(project).state.dismissedSessions.toSet()
 
     fun create(): ConversationController = create(null, nextTitle())
 
@@ -106,6 +127,7 @@ class ConversationManager(private val project: Project) : Disposable {
         )
         if (sessionId != null) {
             conversation.transcript.addAll(ClaudeSessions.transcriptOf(project.basePath, sessionId))
+            store.save(conversation)
         }
         val controller = register(conversation)
         persist()
@@ -140,7 +162,6 @@ class ConversationManager(private val project: Project) : Disposable {
     fun persist() {
         val state = ConversationState.getInstance(project).state
         state.entries = controllers.values.filter { it.conversation.transcript.isNotEmpty() }.map { controller ->
-            store.save(controller.conversation)
             ConversationEntry().apply {
                 id = controller.conversation.id
                 title = controller.conversation.title
@@ -155,6 +176,7 @@ class ConversationManager(private val project: Project) : Disposable {
     }
 
     override fun dispose() {
+        controllers.values.forEach { store.save(it.conversation) }
         persist()
         controllers.clear()
         listeners.clear()

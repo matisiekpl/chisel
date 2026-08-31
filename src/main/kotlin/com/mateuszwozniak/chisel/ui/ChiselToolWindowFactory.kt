@@ -24,7 +24,8 @@ class ChiselToolWindowFactory : ToolWindowFactory, DumbAware {
         val conversations = manager.restore()
         val state = ConversationState.getInstance(project).state
         val initial = conversations.firstOrNull { it.conversation.id == state.selectedId }
-            ?: conversations.first()
+            ?: conversations.firstOrNull()
+            ?: manager.create()
         view.show(toolWindow, initial)
         manager.persist()
 
