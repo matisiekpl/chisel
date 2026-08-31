@@ -1,0 +1,22 @@
+<idea-plugin>
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Chisel"
+                    factoryClass="com.mateuszwozniak.chisel.ui.ChiselToolWindowFactory"
+                    anchor="right"
+                    icon="/icons/chisel.svg"
+                    canCloseContents="true"/>
+        <toolWindow id="Conversations"
+                    factoryClass="com.mateuszwozniak.chisel.ui.ConversationListToolWindowFactory"
+                    anchor="left"
+                    icon="/icons/chisel.svg"/>
+        <applicationConfigurable
+                parentId="tools"
+                instance="com.mateuszwozniak.chisel.ui.ChiselConfigurable"
+                id="com.mateuszwozniak.chisel.settings"
+                displayName="Chisel"/>
+        <diff.DiffExtension
+                implementation="com.mateuszwozniak.chisel.ui.approval.AnnotationDiffExtension"/>
+    </extensions>
+</idea-plugin>

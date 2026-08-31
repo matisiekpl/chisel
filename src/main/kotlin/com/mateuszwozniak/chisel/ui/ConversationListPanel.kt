@@ -1,0 +1,217 @@
+package com.mateuszwozniak.chisel.ui
+
+import com.intellij.icons.AllIcons
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionGroup
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.actionSystem.Separator
+import com.intellij.openapi.project.DumbAware
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.ui.SimpleToolWindowPanel
+import com.intellij.ui.ColoredTreeCellRenderer
+import com.intellij.ui.DocumentAdapter
+import com.intellij.ui.PopupHandler
+import com.intellij.ui.ScrollPaneFactory
+import com.intellij.ui.SearchTextField
+import com.intellij.ui.SimpleTextAttributes
+import com.intellij.ui.treeStructure.Tree
+import com.intellij.util.ui.JBUI
+import com.mateuszwozniak.chisel.service.ConversationController
+import com.mateuszwozniak.chisel.service.ConversationManager
+import com.mateuszwozniak.chisel.service.ConversationsListener
+import java.awt.BorderLayout
+import java.awt.Component
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
+import javax.swing.JComponent
+import javax.swing.JPanel
+import javax.swing.JTree
+import javax.swing.SwingUtilities
+import javax.swing.event.DocumentEvent
+import javax.swing.tree.DefaultMutableTreeNode
+import javax.swing.tree.DefaultTreeModel
+import javax.swing.tree.TreePath
+import javax.swing.tree.TreeSelectionModel
+
+class ConversationListPanel(private val project: Project) :
+    SimpleToolWindowPanel(true, true), ConversationsListener, Disposable {
+
+    private val manager = ConversationManager.getInstance(project)
+    private val root = DefaultMutableTreeNode()
+    private val group = DefaultMutableTreeNode(GROUP_LABEL)
+    private val treeModel = DefaultTreeModel(root)
+    private val tree = Tree(treeModel)
+    private val searchField = SearchTextField(false)
+
+    private val renameAction = object :
+        AnAction("Rename", "Rename this conversation", AllIcons.Actions.Edit), DumbAware {
+
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+        override fun update(event: AnActionEvent) {
+            event.presentation.isEnabled = selection() != null
+        }
+
+        override fun actionPerformed(event: AnActionEvent) = rename()
+    }
+
+    private val deleteAction = object :
+        AnAction("Delete", "Delete this conversation", AllIcons.General.Remove), DumbAware {
+
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+        override fun update(event: AnActionEvent) {
+            event.presentation.isEnabled = selection() != null
+        }
+
+        override fun actionPerformed(event: AnActionEvent) = delete()
+    }
+
+    init {
+        root.add(group)
+        tree.isRootVisible = false
+        tree.showsRootHandles = true
+        tree.selectionModel.selectionMode = TreeSelectionModel.SINGLE_TREE_SELECTION
+        tree.cellRenderer = ConversationTreeRenderer()
+        tree.emptyText.text = "No conversations"
+        tree.border = JBUI.Borders.empty(4, 8, 0, 0)
+        tree.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(event: MouseEvent) {
+                if (!SwingUtilities.isLeftMouseButton(event)) return
+                selection()?.let { ConversationTabs.open(project, it) }
+            }
+        })
+        tree.addMouseListener(object : PopupHandler() {
+            override fun invokePopup(component: Component, x: Int, y: Int) {
+                if (selection() == null) return
+                ActionManager.getInstance()
+                    .createActionPopupMenu(PLACE, contextMenu())
+                    .component
+                    .show(component, x, y)
+            }
+        })
+
+        searchField.textEditor.emptyText.text = "Search conversations"
+        searchField.border = JBUI.Borders.empty(4, 6)
+        searchField.addDocumentListener(object : DocumentAdapter() {
+            override fun textChanged(event: DocumentEvent) = refresh()
+        })
+
+        toolbar = buildToolbar()
+        setContent(buildContent())
+
+        manager.addChangeListener(this)
+        refresh()
+    }
+
+    override fun onConversationsChanged() = refresh()
+
+    override fun dispose() {
+        manager.removeChangeListener(this)
+    }
+
+    private fun buildContent(): JComponent {
+        val content = JPanel(BorderLayout())
+        content.add(searchField, BorderLayout.NORTH)
+        content.add(ScrollPaneFactory.createScrollPane(tree, true), BorderLayout.CENTER)
+        return content
+    }
+
+    private fun buildToolbar(): JComponent {
+        val actions = DefaultActionGroup(
+            NewConversationAction(project),
+            renameAction,
+            deleteAction,
+            Separator.getInstance(),
+            AccountAction(project),
+        )
+        val toolbar = ActionManager.getInstance().createActionToolbar(PLACE, actions, true)
+        toolbar.targetComponent = tree
+        return toolbar.component
+    }
+
+    private fun contextMenu(): ActionGroup = DefaultActionGroup(renameAction, deleteAction)
+
+    private fun rename() {
+        val controller = selection() ?: return
+        val title = Messages.showInputDialog(
+            project,
+            "Conversation name:",
+            "Rename Conversation",
+            null,
+            controller.conversation.title,
+            null,
+        )?.trim()
+        if (title.isNullOrEmpty()) return
+        manager.rename(controller, title)
+        ConversationTabs.retitle(project, controller)
+    }
+
+    private fun delete() {
+        val controller = selection() ?: return
+        val confirmed = Messages.showYesNoDialog(
+            project,
+            "Delete " + controller.conversation.title + " and its transcript?",
+            "Delete Conversation",
+            Messages.getWarningIcon(),
+        )
+        if (confirmed != Messages.YES) return
+        ConversationTabs.close(project, controller)
+        manager.delete(controller)
+    }
+
+    private fun refresh() {
+        val selected = selection()
+        val filter = searchField.text.trim()
+        group.removeAllChildren()
+        manager.conversations()
+            .filter { filter.isEmpty() || it.conversation.title.contains(filter, ignoreCase = true) }
+            .forEach { group.add(DefaultMutableTreeNode(it)) }
+        treeModel.reload()
+        tree.expandPath(TreePath(arrayOf<Any>(root, group)))
+        selected?.let { select(it) }
+    }
+
+    private fun select(controller: ConversationController) {
+        val node = (0 until group.childCount)
+            .map { group.getChildAt(it) }
+            .filterIsInstance<DefaultMutableTreeNode>()
+            .firstOrNull { it.userObject === controller } ?: return
+        tree.selectionPath = TreePath(node.path)
+    }
+
+    private fun selection(): ConversationController? =
+        (tree.lastSelectedPathComponent as? DefaultMutableTreeNode)?.userObject as? ConversationController
+
+    private class ConversationTreeRenderer : ColoredTreeCellRenderer() {
+
+        override fun customizeCellRenderer(
+            tree: JTree,
+            value: Any?,
+            selected: Boolean,
+            expanded: Boolean,
+            leaf: Boolean,
+            row: Int,
+            hasFocus: Boolean,
+        ) {
+            when (val node = (value as? DefaultMutableTreeNode)?.userObject) {
+                is ConversationController -> {
+                    icon = AllIcons.General.Balloon
+                    append(node.conversation.title)
+                }
+
+                is String -> append(node, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
+            }
+        }
+    }
+
+    private companion object {
+        const val PLACE = "ChiselConversationList"
+        const val GROUP_LABEL = "Conversations"
+    }
+}
