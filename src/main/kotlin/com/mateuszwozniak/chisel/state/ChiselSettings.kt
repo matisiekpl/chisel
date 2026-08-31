@@ -20,6 +20,7 @@ class ChiselSettings : SimplePersistentStateComponent<ChiselSettings.Model>(Mode
         var planEffort by enum(EffortLevel.HIGH)
         var implementationModel by enum(AgentModel.SONNET)
         var implementationEffort by enum(EffortLevel.MEDIUM)
+        var allowMcpInPlanMode by property(true)
     }
 
     var defaultMode: AgentMode
@@ -50,6 +51,12 @@ class ChiselSettings : SimplePersistentStateComponent<ChiselSettings.Model>(Mode
         get() = state.implementationEffort
         set(value) {
             state.implementationEffort = value
+        }
+
+    var allowMcpInPlanMode: Boolean
+        get() = state.allowMcpInPlanMode
+        set(value) {
+            state.allowMcpInPlanMode = value
         }
 
     fun modelFor(mode: AgentMode): AgentModel =

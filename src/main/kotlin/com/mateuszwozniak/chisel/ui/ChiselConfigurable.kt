@@ -7,6 +7,7 @@ import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.dsl.builder.Cell
 import com.intellij.ui.dsl.builder.Row
 import com.intellij.ui.dsl.builder.bindItem
+import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
 import com.mateuszwozniak.chisel.model.AgentMode
 import com.mateuszwozniak.chisel.model.AgentModel
@@ -29,7 +30,12 @@ class ChiselConfigurable : BoundConfigurable("Chisel") {
             row("Effort:") { effortBox(settings::implementationEffort) }
         }
         row {
-            comment("Applies to conversations started after the change.")
+            checkBox("Allow MCP tools in Plan mode")
+                .bindSelected(settings::allowMcpInPlanMode)
+                .comment("MCP tools run without an approval dialog while planning. File writes stay blocked.")
+        }
+        row {
+            comment("The mode, model and effort apply to conversations started after the change.")
         }
     }
 

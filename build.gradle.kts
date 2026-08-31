@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.mateuszwozniak"
-version = "0.2.2"
+version = "0.3.0"
 
 dependencies {
     intellijPlatform {
@@ -48,6 +48,7 @@ intellijPlatform {
 
         changeNotes = """
             <ul>
+              <li>MCP tools run without an approval dialog in Plan mode, switchable in Settings | Tools | Chisel.</li>
               <li>The prompt input paints one surface: the editor area no longer sits as a lighter box inside the card.</li>
             </ul>
         """.trimIndent()

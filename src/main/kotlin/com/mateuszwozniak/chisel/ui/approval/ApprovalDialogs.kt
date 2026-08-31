@@ -16,6 +16,7 @@ import com.mateuszwozniak.chisel.protocol.string
 import com.mateuszwozniak.chisel.service.ConversationController
 import com.mateuszwozniak.chisel.service.FeedbackFormatter
 import com.mateuszwozniak.chisel.service.PermissionRouter
+import com.mateuszwozniak.chisel.state.ChiselSettings
 import com.mateuszwozniak.chisel.util.ProjectPaths
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
@@ -48,9 +49,21 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
             respond(PermissionDecision.Deny(PLAN_MODE_DENIAL))
             return
         }
-        if (writeInput != null) showEdit(request, writeInput, respond)
-        else showCommand(request, respond)
+        if (writeInput != null) {
+            showEdit(request, writeInput, respond)
+            return
+        }
+        if (allowedWhilePlanning(controller.conversation.mode, request.toolName)) {
+            respond(PermissionDecision.Allow())
+            return
+        }
+        showCommand(request, respond)
     }
+
+    private fun allowedWhilePlanning(mode: AgentMode, toolName: String): Boolean =
+        mode == AgentMode.PLAN &&
+            toolName.startsWith(MCP_PREFIX) &&
+            ChiselSettings.getInstance().allowMcpInPlanMode
 
     override fun cancel(requestId: String) {
         cancelled.add(requestId)
@@ -175,6 +188,8 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
     private companion object {
 
         const val EXIT_PLAN_MODE = "ExitPlanMode"
+
+        const val MCP_PREFIX = "mcp__"
 
         const val ASK_MODE_DENIAL =
             "Ask mode is active, so only read-only tools are available. Answer from what you " +
