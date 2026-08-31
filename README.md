@@ -1,11 +1,76 @@
 # Chisel
 
-An IntelliJ IDEA tool window that runs the Claude Code CLI installed on your machine and puts
-every file write in front of you before it lands on disk.
+An IntelliJ IDEA tool window that runs the Claude Code CLI installed on your machine and stops
+every file write in a review dialog, where the proposal can be commented line by line and edited
+by hand before it reaches disk.
 
-![Chisel prompt input](screenshots/prompt.png)
+## Reviewing a write
+
+Write, Edit and NotebookEdit open the IDE's own side-by-side diff. The left side holds the file
+as it is on disk and is read-only; the right side holds the agent's proposal in an editable
+document.
+
+![Commenting a line in the review dialog](screenshots/review-comment.png)
+
+Every line in the proposal takes a comment. The `+` control in the gutter opens an inline field,
+`⌘⇧M` opens one at the caret, `Enter` saves it and `Del` removes it. Comments stay pinned to
+their line and stack up across the file.
+
+![Editing the proposal by hand](screenshots/review-edit.png)
+
+The proposal is also a normal editor: typing in it rewrites the agent's text, and every character
+that differs from what the agent proposed is highlighted. **Revert changes** (`⌘⌫`) drops the
+comments and the edits and brings back the untouched proposal.
+
+Three ways out of the dialog:
+
+| Button | What the agent receives |
+| --- | --- |
+| **Accept** (`⌘⏎`, when nothing was touched) | `{"behavior":"allow"}` — the write goes through unchanged |
+| **Adjust** (`⌘⏎`, after a comment or an edit) | `{"behavior":"deny"}` with the edited file in a fenced block and the comments as a `line N: text` list |
+| **Reject** (`⌘⇧⌫`) | `{"behavior":"deny","interrupt":true}` — the turn ends |
+
+The denial that carries feedback tells the agent that the comments outrank the edited file
+wherever the two disagree, and that the decisions apply to every file it touches afterwards. A
+denied write is not applied, and the review stays in the conversation history.
+
+## Modes
+
+| Mode | Behaviour |
+| --- | --- |
+| Ask | Every tool that asks for permission is denied with a note that the conversation is read-only. Reading, searching and web tools work as usual. |
+| Plan | `--permission-mode plan`. Write, Edit and NotebookEdit are denied without a dialog. |
+| Implementation | `--permission-mode manual`. Write, Edit and NotebookEdit open the review dialog. Bash and the rest open an allow/deny dialog. |
+| Auto | `--permission-mode auto`. The CLI decides; the dialogs still appear for anything it escalates. |
+
+Read, Glob, Grep, WebFetch, WebSearch, TodoWrite and Task run without asking in every mode.
+Switching modes sends `set_permission_mode` on the control channel, so the process keeps running.
+
+![The plan dialog](screenshots/plan.png)
+
+When the agent calls `ExitPlanMode`, the plan opens in its own dialog with a feedback field. With
+the field empty the button reads **Implement** (`⌘⏎`) and approves the call, which flips the mode;
+with notes in it the button reads **Send feedback**, the call is denied and the notes go back as
+the next instruction.
+
+Shell commands open a dialog with the command and the agent's description of it. In
+Implementation mode the system prompt is extended with a request for commands that read clearly:
+one thing per call, no unrelated work chained with `&&`, long option names, a description on
+every call. Questions from `AskUserQuestion` open as a dialog with the options as buttons.
+
+## Rewind
+
+Clicking a message you sent opens a confirmation showing which files will be restored and how
+many messages will be dropped. Confirming sends `rewind_files` with that message's UUID, then
+restarts the process with `--resume <id> --resume-session-at <uuid>` and puts the original
+prompt back in the input field.
+
+Checkpoints cover Write, Edit and NotebookEdit. Changes made through Bash and edits applied by
+subagents are not restored.
 
 ## Conversations
+
+![The prompt input](screenshots/prompt.png)
 
 The Conversations tool window on the left lists every conversation, with a search field, and a
 right click offers Rename and Delete; deleting also offers to remove the underlying Claude CLI
@@ -21,42 +86,10 @@ The conversation toolbar holds Continue, Compact, Subagents, Remote control, Exp
 Export writes the transcript as Markdown. Next to the prompt input sit the context meter, the
 token counts and the session cost.
 
-## Modes
-
-| Mode | Behaviour |
-| --- | --- |
-| Ask | Every tool that asks for permission is denied with a note explaining that the conversation is read-only. Reading, searching and web tools work as usual. |
-| Plan | `--permission-mode plan`. Write, Edit and NotebookEdit are denied without a dialog. |
-| Implementation | `--permission-mode manual`. Write, Edit and NotebookEdit open a diff dialog. Bash and the rest open an allow/deny dialog. |
-| Auto | `--permission-mode auto`. The CLI decides; the dialogs still appear for anything it escalates. |
-
-Read, Glob, Grep, WebFetch, WebSearch, TodoWrite and Task run without asking in every mode.
-Switching modes sends `set_permission_mode` on the control channel, so the process keeps running.
-When the agent calls `ExitPlanMode`, the plan opens in a dialog: **Start implementing** approves
-the call and flips the mode, **Keep planning** denies it and sends your notes back.
-
 Model and effort are set per conversation from the bar under the prompt. Settings | Tools |
 Chisel holds the default mode and a model and effort pair for Plan and for Implementation; Ask
 and Auto start from the Plan pair. Effort ranges from Low to Max, plus Ultracode, which passes
 `--settings {"ultracode":true}`.
-
-## The write dialog
-
-The current file is on the left, the agent's proposal on the right in an editable document.
-The gutter carries a comment control on every line; clicking it opens an inline text field.
-
-| What you do | What the agent receives |
-| --- | --- |
-| Nothing | `{"behavior":"allow"}` — the write goes through unchanged |
-| Comment on lines, or edit the proposal | `{"behavior":"deny"}` with your comments and your version of the file |
-| Reject and stop | `{"behavior":"deny","interrupt":true}` — the turn ends |
-
-Any intervention denies the write, and the correction stays in the conversation history.
-
-Shell commands open their own dialog with the command and the agent's description of it. In
-Implementation mode the system prompt is extended with a request for commands that read clearly:
-one thing per call, no unrelated work chained with `&&`, long option names, a description on
-every call. Questions from `AskUserQuestion` open as a dialog with the options as buttons.
 
 ## Attachments
 
@@ -71,16 +104,6 @@ comments, primary and foreign keys with their referential actions, indexes, and 
 column list — written to a `.sql` file and attached like any other file. A data source that has
 not been introspected yet is introspected on selection. In IDEs without the Database plugin the
 button is absent.
-
-## Rewind
-
-Clicking a message you sent opens a confirmation showing which files will be restored and how
-many messages will be dropped. Confirming sends `rewind_files` with that message's UUID, then
-restarts the process with `--resume <id> --resume-session-at <uuid>` and puts the original
-prompt back in the input field.
-
-Checkpoints cover Write, Edit and NotebookEdit. Changes made through Bash and edits applied by
-subagents are not restored.
 
 ## Remote control
 
