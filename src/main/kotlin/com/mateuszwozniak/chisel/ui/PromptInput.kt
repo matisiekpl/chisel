@@ -24,6 +24,7 @@ import com.mateuszwozniak.chisel.model.PromptAttachment
 import com.mateuszwozniak.chisel.model.QueuedPrompt
 import java.awt.BasicStroke
 import java.awt.BorderLayout
+import java.awt.Color
 import java.awt.Cursor
 import java.awt.Dimension
 import java.awt.FlowLayout
@@ -150,8 +151,9 @@ class PromptInput(
         border = JBUI.Borders.empty(6, 8, 8, 8)
         promptField.setPlaceholder("Ask a question, or type @ to reference a file")
         promptField.border = JBUI.Borders.empty(0, TEXT_INSET)
-        promptField.background = EditorColorsManager.getInstance().globalScheme.defaultBackground
+        promptField.background = surface()
         promptField.addSettingsProvider { editor ->
+            editor.backgroundColor = surface()
             editor.setBorder(JBUI.Borders.empty())
             editor.settings.isUseSoftWraps = true
             editor.setVerticalScrollbarVisible(true)
@@ -430,7 +432,7 @@ class PromptInput(
             graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
             val arc = JBUI.scale(ARC).toFloat()
             val shape = RoundRectangle2D.Float(0.5f, 0.5f, width - 1f, height - 1f, arc, arc)
-            graphics.color = EditorColorsManager.getInstance().globalScheme.defaultBackground
+            graphics.color = surface()
             graphics.fill(shape)
             graphics.color = if (focused) JBUI.CurrentTheme.Focus.focusColor() else JBColor.border()
             graphics.stroke = BasicStroke(1f)
@@ -440,6 +442,9 @@ class PromptInput(
     }
 
     private companion object {
+
+        fun surface(): Color = EditorColorsManager.getInstance().globalScheme.defaultBackground
+
         const val DEFAULT_HEIGHT = 88
         const val MIN_HEIGHT = 48
         const val MAX_HEIGHT = 600

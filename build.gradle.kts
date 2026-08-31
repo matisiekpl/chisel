@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.mateuszwozniak"
-version = "0.2.1"
+version = "0.2.2"
 
 dependencies {
     intellijPlatform {
@@ -48,11 +48,7 @@ intellijPlatform {
 
         changeNotes = """
             <ul>
-              <li>The conversation panel shows one conversation at a time instead of stacking tool window tabs.</li>
-              <li>In IDEs with the Database plugin, the schema of a data source attaches to a prompt as DDL.</li>
-              <li>Every conversation started in the terminal is picked up, titled by its first real prompt.</li>
-              <li>Changing the model or the effort level no longer reports a failed process.</li>
-              <li>The prompt input and its badges follow the editor colours, and the file chooser uses the current platform API.</li>
+              <li>The prompt input paints one surface: the editor area no longer sits as a lighter box inside the card.</li>
             </ul>
         """.trimIndent()
         vendor {
