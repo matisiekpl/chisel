@@ -18,7 +18,28 @@ class MarkdownRenderer(project: Project) {
         HighlightedFlavour(CodeBlockHtmlSyntaxHighlighter(project)),
     )
 
-    fun render(markdown: String): String = converter.convertMarkdownToHtml(markdown)
+    fun render(markdown: String): String = converter.convertMarkdownToHtml(wrapFences(markdown))
+
+    private fun wrapFences(markdown: String): String {
+        var inside = false
+        return markdown.lineSequence().joinToString("\n") { line ->
+            when {
+                line.trimStart().startsWith(FENCE) -> {
+                    inside = !inside
+                    line
+                }
+
+                inside && line.length > WRAP_LIMIT -> line.chunked(WRAP_LIMIT).joinToString("\n")
+
+                else -> line
+            }
+        }
+    }
+
+    private companion object {
+        const val FENCE = "```"
+        const val WRAP_LIMIT = 100
+    }
 
     private class HighlightedFlavour(
         private val highlighter: HtmlSyntaxHighlighter,

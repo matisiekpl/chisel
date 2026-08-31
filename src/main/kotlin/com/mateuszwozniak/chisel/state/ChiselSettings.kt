@@ -46,10 +46,10 @@ class ChiselSettings : SimplePersistentStateComponent<ChiselSettings.Model>(Mode
         }
 
     fun modelFor(mode: AgentMode): AgentModel =
-        if (mode == AgentMode.PLAN) planModel else implementationModel
+        if (mode == AgentMode.IMPLEMENTATION) implementationModel else planModel
 
     fun effortFor(mode: AgentMode): EffortLevel =
-        if (mode == AgentMode.PLAN) planEffort else implementationEffort
+        if (mode == AgentMode.IMPLEMENTATION) implementationEffort else planEffort
 
     companion object {
         fun getInstance(): ChiselSettings = service()

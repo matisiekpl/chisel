@@ -4,30 +4,28 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
-import com.intellij.ui.DocumentAdapter
+import com.intellij.openapi.ui.DialogWrapper.IdeModalityType
 import com.intellij.ui.ScrollPaneFactory
-import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBUI
-import com.mateuszwozniak.chisel.ui.BadgeShape
+import com.mateuszwozniak.chisel.ui.FeedbackArea
 import com.mateuszwozniak.chisel.ui.HtmlView
 import com.mateuszwozniak.chisel.ui.MarkdownRenderer
 import java.awt.BorderLayout
 import java.awt.Dimension
-import java.awt.Graphics
 import java.awt.event.ActionEvent
 import javax.swing.Action
 import javax.swing.JComponent
 import javax.swing.JPanel
-import javax.swing.event.DocumentEvent
+import javax.swing.ScrollPaneConstants
 
 class PlanApprovalDialog(
     private val project: Project,
     private val planMarkdown: String,
-) : DialogWrapper(project, true) {
+) : DialogWrapper(project, true, IdeModalityType.MODELESS) {
 
     enum class Outcome { IMPLEMENT, KEEP_PLANNING }
 
-    private val feedbackField = JBTextArea(FEEDBACK_ROWS, 40)
+    private val feedback = FeedbackArea("Feedback on the plan, sent back to the agent", FEEDBACK_ROWS)
 
     private val submitAction = object : DialogWrapperAction(IMPLEMENT_LABEL) {
         override fun doAction(event: ActionEvent) {
@@ -42,52 +40,26 @@ class PlanApprovalDialog(
     init {
         title = "Plan ready"
         submitAction.putValue(DEFAULT_ACTION, true)
+        feedback.onChanged {
+            submitAction.putValue(Action.NAME, if (notes().isEmpty()) IMPLEMENT_LABEL else FEEDBACK_LABEL)
+        }
         init()
     }
 
-    fun notes(): String = feedbackField.text.trim()
+    fun notes(): String = feedback.text.trim()
 
     override fun createCenterPanel(): JComponent {
         val panel = JPanel(BorderLayout(0, JBUI.scale(8)))
         panel.preferredSize = Dimension(JBUI.scale(WIDTH), JBUI.scale(HEIGHT))
 
         val view = HtmlView(disposable)
-        panel.add(ScrollPaneFactory.createScrollPane(view.component, true), BorderLayout.CENTER)
+        val scroll = ScrollPaneFactory.createScrollPane(view.component, true)
+        scroll.horizontalScrollBarPolicy = ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
+        panel.add(scroll, BorderLayout.CENTER)
         renderPlanInto(view)
 
-        panel.add(feedbackCard(), BorderLayout.SOUTH)
+        panel.add(feedback, BorderLayout.SOUTH)
         return panel
-    }
-
-    private fun feedbackCard(): JComponent {
-        feedbackField.lineWrap = true
-        feedbackField.wrapStyleWord = true
-        feedbackField.isOpaque = false
-        feedbackField.font = JBUI.Fonts.label()
-        feedbackField.border = JBUI.Borders.empty(2)
-        feedbackField.emptyText.text = "Feedback on the plan, sent back to the agent"
-        feedbackField.document.addDocumentListener(object : DocumentAdapter() {
-            override fun textChanged(event: DocumentEvent) {
-                submitAction.putValue(
-                    Action.NAME,
-                    if (notes().isEmpty()) IMPLEMENT_LABEL else FEEDBACK_LABEL,
-                )
-            }
-        })
-
-        val scroll = ScrollPaneFactory.createScrollPane(feedbackField, true)
-        scroll.isOpaque = false
-        scroll.viewport.isOpaque = false
-
-        val card = object : JPanel(BorderLayout()) {
-            override fun paintComponent(graphics: Graphics) {
-                BadgeShape.paint(graphics, width, height, false)
-            }
-        }
-        card.isOpaque = false
-        card.border = JBUI.Borders.empty(8, 10)
-        card.add(scroll, BorderLayout.CENTER)
-        return card
     }
 
     override fun createActions(): Array<Action> = arrayOf(submitAction)

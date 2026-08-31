@@ -67,7 +67,7 @@ class TranscriptPanel(
 
     override fun onItemAdded(item: TranscriptItem) {
         queue.queue(object : Update("add-${item.id}") {
-            override fun run() = mutate { addView(item) }
+            override fun run() = mutate(item is TranscriptItem.UserPrompt) { addView(item) }
         })
     }
 
@@ -117,10 +117,8 @@ class TranscriptPanel(
         if (item is TranscriptItem.TurnSummary || item is TranscriptItem.Thinking) return
         val view = TranscriptItemView(html, item, contentDisposable)
         when (item) {
-            is TranscriptItem.UserPrompt -> {
-                view.onClicked { item.messageUuid?.let { onRewindRequested(it, true) } }
+            is TranscriptItem.UserPrompt ->
                 view.onContextMenu { component, x, y -> showPromptMenu(item, component, x, y) }
-            }
             is TranscriptItem.ToolCall -> view.onClicked { showDetail(item) }
             else -> Unit
         }
@@ -168,8 +166,8 @@ class TranscriptPanel(
         TranscriptDetailDialog(project, item.name, html.detail(item)).show()
     }
 
-    private fun mutate(action: () -> Unit) {
-        val atBottom = isScrolledToBottom()
+    private fun mutate(force: Boolean = false, action: () -> Unit) {
+        val atBottom = force || isScrolledToBottom()
         action()
         list.revalidate()
         list.repaint()

@@ -8,6 +8,7 @@ import com.intellij.util.ui.JBUI
 import java.awt.Dimension
 import javax.swing.Action
 import javax.swing.JComponent
+import javax.swing.ScrollPaneConstants
 
 class TranscriptDetailDialog(
     project: Project,
@@ -31,6 +32,7 @@ class TranscriptDetailDialog(
                 .apply { border = JBUI.Borders.empty(8, 4) }
         }
         val scroll = ScrollPaneFactory.createScrollPane(view.component, true)
+        scroll.horizontalScrollBarPolicy = ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
         scroll.preferredSize = Dimension(JBUI.scale(WIDTH), JBUI.scale(HEIGHT))
         return scroll
     }

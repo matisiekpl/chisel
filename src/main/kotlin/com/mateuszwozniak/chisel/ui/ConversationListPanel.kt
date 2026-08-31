@@ -125,6 +125,7 @@ class ConversationListPanel(private val project: Project) :
     private fun buildToolbar(): JComponent {
         val actions = DefaultActionGroup(
             NewConversationAction(project),
+            ResumeSessionAction(project),
             renameAction,
             deleteAction,
             Separator.getInstance(),

@@ -16,6 +16,7 @@ import com.intellij.util.ui.UIUtil
 import java.awt.BasicStroke
 import java.awt.BorderLayout
 import java.awt.Dimension
+import java.awt.Cursor
 import java.awt.FlowLayout
 import java.awt.Graphics
 import java.awt.Graphics2D
@@ -25,6 +26,8 @@ import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import java.awt.geom.RoundRectangle2D
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -37,14 +40,18 @@ class PromptInput(
     private val onStop: () -> Unit,
 ) : JPanel(BorderLayout()) {
 
-    private val promptField = TextFieldWithCompletion(
+    private var fieldHeight = JBUI.scale(DEFAULT_HEIGHT)
+
+    private val promptField = object : TextFieldWithCompletion(
         project,
         FilePathCompletionProvider(project),
         "",
         false,
         true,
         false,
-    )
+    ) {
+        override fun getPreferredSize(): Dimension = Dimension(0, fieldHeight)
+    }
 
     private val sendButton = InplaceButton(
         "Send (" + submitShortcutLabel() + ")",
@@ -60,6 +67,8 @@ class PromptInput(
 
     private val card = Card()
 
+    private val resizeHandle = ResizeHandle()
+
     private var busy = false
 
     init {
@@ -67,10 +76,12 @@ class PromptInput(
         promptField.setPlaceholder("Ask a question, or type @ to reference a file")
         promptField.border = JBUI.Borders.empty(0, TEXT_INSET)
         promptField.background = UIUtil.getTextFieldBackground()
-        promptField.preferredSize = Dimension(0, JBUI.scale(FIELD_HEIGHT))
         promptField.addSettingsProvider { editor ->
             editor.setBorder(JBUI.Borders.empty())
             editor.settings.isUseSoftWraps = true
+            editor.setVerticalScrollbarVisible(true)
+            editor.scrollPane.verticalScrollBar.isOpaque = false
+            editor.setShowPlaceholderWhenFocused(true)
         }
         sendButton.preferredSize = Dimension(JBUI.scale(BUTTON_SIZE), JBUI.scale(BUTTON_SIZE))
         stopButton.preferredSize = Dimension(JBUI.scale(BUTTON_SIZE), JBUI.scale(BUTTON_SIZE))
@@ -82,6 +93,7 @@ class PromptInput(
 
         card.add(promptField, BorderLayout.CENTER)
         card.add(buildActions(), BorderLayout.SOUTH)
+        add(resizeHandle, BorderLayout.NORTH)
         add(card, BorderLayout.CENTER)
 
         installShortcuts()
@@ -102,6 +114,47 @@ class PromptInput(
 
     fun requestFocusOnField() {
         promptField.requestFocusInWindow()
+    }
+
+    private fun resizeBy(delta: Int) {
+        val next = (fieldHeight + delta).coerceIn(JBUI.scale(MIN_HEIGHT), JBUI.scale(MAX_HEIGHT))
+        if (next == fieldHeight) return
+        fieldHeight = next
+        revalidate()
+        repaint()
+    }
+
+    private inner class ResizeHandle : JPanel() {
+
+        private var anchor = 0
+
+        init {
+            isOpaque = false
+            cursor = Cursor.getPredefinedCursor(Cursor.N_RESIZE_CURSOR)
+            preferredSize = Dimension(0, JBUI.scale(HANDLE_HEIGHT))
+            val adapter = object : MouseAdapter() {
+                override fun mousePressed(event: MouseEvent) {
+                    anchor = event.yOnScreen
+                }
+
+                override fun mouseDragged(event: MouseEvent) {
+                    resizeBy(anchor - event.yOnScreen)
+                    anchor = event.yOnScreen
+                }
+            }
+            addMouseListener(adapter)
+            addMouseMotionListener(adapter)
+        }
+
+        override fun paintComponent(graphics: Graphics) {
+            val canvas = graphics.create() as Graphics2D
+            canvas.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            canvas.color = JBColor.border()
+            val width = JBUI.scale(GRIP_WIDTH)
+            val height = JBUI.scale(GRIP_HEIGHT)
+            canvas.fillRoundRect((getWidth() - width) / 2, (getHeight() - height) / 2, width, height, height, height)
+            canvas.dispose()
+        }
     }
 
     private fun buildActions(): JComponent {
@@ -193,7 +246,12 @@ class PromptInput(
     }
 
     private companion object {
-        const val FIELD_HEIGHT = 88
+        const val DEFAULT_HEIGHT = 88
+        const val MIN_HEIGHT = 48
+        const val MAX_HEIGHT = 600
+        const val HANDLE_HEIGHT = 8
+        const val GRIP_WIDTH = 28
+        const val GRIP_HEIGHT = 3
         const val ARC = 14
         const val BUTTON_SIZE = 24
         const val EDGE = 4

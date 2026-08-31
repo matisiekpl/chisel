@@ -1,10 +1,12 @@
 package com.mateuszwozniak.chisel.ui.approval
 
 import com.google.gson.JsonObject
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.util.Disposer
 import com.mateuszwozniak.chisel.model.AgentMode
 import com.mateuszwozniak.chisel.protocol.PermissionDecision
 import com.mateuszwozniak.chisel.protocol.PermissionRequest
@@ -28,13 +30,17 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         request: PermissionRequest,
         respond: (PermissionDecision) -> Unit,
     ) {
-        if (request.toolName == EXIT_PLAN_MODE) {
-            showPlan(controller, request, respond)
-            return
-        }
         val questions = UserQuestion.parse(request.toolName, request.input)
         if (questions != null) {
             showQuestions(request, questions, respond)
+            return
+        }
+        if (controller.conversation.mode == AgentMode.ASK) {
+            respond(PermissionDecision.Deny(ASK_MODE_DENIAL))
+            return
+        }
+        if (request.toolName == EXIT_PLAN_MODE) {
+            showPlan(controller, request, respond)
             return
         }
         val writeInput = WriteToolInput.parse(request.toolName, request.input)
@@ -61,9 +67,9 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         onEventDispatchThread {
             val displayPath = ProjectPaths.relative(project.basePath, input.filePath)
             val dialog = EditApprovalDialog(project, input, displayPath)
-            val decision = withDialog(request.requestId, dialog) {
+            withDialog(request.requestId, dialog) {
                 val formatter = FeedbackFormatter(displayPath)
-                when (dialog.outcome) {
+                val decision = when (dialog.outcome) {
                     EditApprovalDialog.Outcome.ACCEPT -> PermissionDecision.Allow()
 
                     EditApprovalDialog.Outcome.FEEDBACK -> PermissionDecision.Deny(
@@ -75,8 +81,8 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
                         interrupt = true,
                     )
                 }
-            } ?: return@onEventDispatchThread
-            sendDecision(respond, decision)
+                sendDecision(respond, decision)
+            }
         }
     }
 
@@ -85,18 +91,16 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
             val dialog = CommandApprovalDialog(
                 project,
                 request.toolName,
-                describe(request),
-                request.decisionReason,
+                commandOf(request),
+                request.input.string("description") ?: request.decisionReason,
             )
-            val decision = withDialog(request.requestId, dialog) {
-                when (dialog.outcome) {
+            withDialog(request.requestId, dialog) {
+                val decision = when (dialog.outcome) {
                     CommandApprovalDialog.Outcome.ALLOW -> PermissionDecision.Allow()
-                    CommandApprovalDialog.Outcome.DENY -> PermissionDecision.Deny(
-                        dialog.denyReason().ifEmpty { DEFAULT_DENIAL }
-                    )
+                    CommandApprovalDialog.Outcome.DENY -> PermissionDecision.Deny(DEFAULT_DENIAL)
                 }
-            } ?: return@onEventDispatchThread
-            sendDecision(respond, decision)
+                sendDecision(respond, decision)
+            }
         }
     }
 
@@ -107,15 +111,15 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
     ) {
         onEventDispatchThread {
             val dialog = QuestionDialog(project, questions)
-            val decision = withDialog(request.requestId, dialog) {
+            withDialog(request.requestId, dialog) {
                 val answers = dialog.answers()
-                if (dialog.outcome == QuestionDialog.Outcome.ANSWER && answers.isNotEmpty()) {
+                val decision = if (dialog.outcome == QuestionDialog.Outcome.ANSWER && answers.isNotEmpty()) {
                     PermissionDecision.Allow(answered(request.input, answers))
                 } else {
                     PermissionDecision.Deny(QUESTION_DENIAL)
                 }
-            } ?: return@onEventDispatchThread
-            sendDecision(respond, decision)
+                sendDecision(respond, decision)
+            }
         }
     }
 
@@ -133,36 +137,32 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         onEventDispatchThread {
             val plan = request.input.string("plan").orEmpty()
             val dialog = PlanApprovalDialog(project, plan)
-            val outcome = withDialog(request.requestId, dialog) { dialog.outcome }
-                ?: return@onEventDispatchThread
-            if (outcome == PlanApprovalDialog.Outcome.IMPLEMENT) {
-                sendDecision(respond, PermissionDecision.Allow())
-                controller.changeMode(AgentMode.IMPLEMENTATION)
-                return@onEventDispatchThread
+            withDialog(request.requestId, dialog) {
+                if (dialog.outcome == PlanApprovalDialog.Outcome.IMPLEMENT) {
+                    sendDecision(respond, PermissionDecision.Allow())
+                    controller.changeMode(AgentMode.IMPLEMENTATION)
+                    return@withDialog
+                }
+                val notes = dialog.notes().ifEmpty { KEEP_PLANNING_DENIAL }
+                sendDecision(respond, PermissionDecision.Deny(notes))
             }
-            val notes = dialog.notes().ifEmpty { KEEP_PLANNING_DENIAL }
-            sendDecision(respond, PermissionDecision.Deny(notes))
         }
     }
 
-    private fun <T> withDialog(requestId: String, dialog: DialogWrapper, read: () -> T): T? {
+    private fun withDialog(requestId: String, dialog: DialogWrapper, onClosed: () -> Unit) {
         openDialogs[requestId] = dialog
+        Disposer.register(dialog.disposable, Disposable {
+            openDialogs.remove(requestId)
+            if (!cancelled.remove(requestId)) onClosed()
+        })
         dialog.show()
-        openDialogs.remove(requestId)
-        if (cancelled.remove(requestId)) return null
-        return read()
     }
 
-    private fun describe(request: PermissionRequest): String {
-        request.input.string("command")?.let { command ->
-            val description = request.input.string("description")
-            return if (description == null) command else "$command\n\n$description"
-        }
-        return request.input.entrySet().joinToString("\n") { entry ->
+    private fun commandOf(request: PermissionRequest): String =
+        request.input.string("command") ?: request.input.entrySet().joinToString("\n") { entry ->
             val value = if (entry.value.isJsonPrimitive) entry.value.asString else entry.value.toString()
             "${entry.key}: $value"
         }
-    }
 
     private fun sendDecision(respond: (PermissionDecision) -> Unit, decision: PermissionDecision) {
         ApplicationManager.getApplication().executeOnPooledThread { respond(decision) }
@@ -175,6 +175,10 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
     private companion object {
 
         const val EXIT_PLAN_MODE = "ExitPlanMode"
+
+        const val ASK_MODE_DENIAL =
+            "Ask mode is active, so only read-only tools are available. Answer from what you " +
+                "can read, and do not modify anything or write a plan."
 
         const val PLAN_MODE_DENIAL =
             "Plan mode is active, so writing files is not allowed. Keep exploring and " +

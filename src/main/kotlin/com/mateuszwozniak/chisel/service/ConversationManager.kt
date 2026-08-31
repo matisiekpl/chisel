@@ -1,5 +1,6 @@
 package com.mateuszwozniak.chisel.service
 
+import com.intellij.ide.SaveAndSyncHandler
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -32,7 +33,8 @@ class ConversationManager(private val project: Project) : Disposable {
         restored = true
         ConversationState.getInstance(project).state.entries.toList().forEach { entry ->
             val id = entry.id ?: return@forEach
-            val mode = AgentMode.fromPermissionMode(entry.mode.orEmpty())
+            val mode = AgentMode.entries.firstOrNull { it.name == entry.mode }
+                ?: AgentMode.fromPermissionMode(entry.mode.orEmpty())
             val settings = ChiselSettings.getInstance()
             val conversation = Conversation(
                 id,
@@ -49,15 +51,18 @@ class ConversationManager(private val project: Project) : Disposable {
         return conversations()
     }
 
-    fun create(): ConversationController {
+    fun create(): ConversationController = create(null, nextTitle())
+
+    fun create(sessionId: String?, title: String): ConversationController {
         val settings = ChiselSettings.getInstance()
         val controller = register(
             Conversation(
                 UUID.randomUUID().toString(),
-                nextTitle(),
+                title,
                 AgentMode.PLAN,
                 settings.modelFor(AgentMode.PLAN),
                 settings.effortFor(AgentMode.PLAN),
+                sessionId,
             )
         )
         persist()
@@ -95,11 +100,12 @@ class ConversationManager(private val project: Project) : Disposable {
                 id = controller.conversation.id
                 title = controller.conversation.title
                 sessionId = controller.conversation.sessionId
-                mode = controller.conversation.mode.permissionMode
+                mode = controller.conversation.mode.name
                 model = controller.conversation.model.name
                 effort = controller.conversation.effort.name
             }
         }.toMutableList()
+        SaveAndSyncHandler.getInstance().scheduleProjectSave(project)
     }
 
     override fun dispose() {

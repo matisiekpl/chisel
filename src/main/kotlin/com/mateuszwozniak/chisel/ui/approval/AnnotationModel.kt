@@ -8,9 +8,17 @@ class AnnotationModel {
 
     var onChanged: () -> Unit = {}
 
+    var onCleared: () -> Unit = {}
+
     fun put(line: Int, text: String) {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) entries.remove(line) else entries[line] = trimmed
+        onChanged()
+    }
+
+    fun clear() {
+        entries.clear()
+        onCleared()
         onChanged()
     }
 

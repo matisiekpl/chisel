@@ -17,15 +17,14 @@ import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.components.ActionLink
-import com.intellij.ui.components.JBTextArea
+import com.mateuszwozniak.chisel.ui.FeedbackArea
 import com.intellij.util.ui.EmptyIcon
 import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import javax.swing.Icon
 import javax.swing.JPanel
-import javax.swing.event.DocumentEvent
-import javax.swing.event.DocumentListener
+import javax.swing.SwingUtilities
 
 class AnnotationInlays(
     private val editor: EditorEx,
@@ -51,6 +50,12 @@ class AnnotationInlays(
             ).gutterIconRenderer = AddAnnotationRenderer(line)
         }
         editor.addEditorMouseMotionListener(HoverTracker(), parent)
+        model.onCleared = { closeAll() }
+    }
+
+    private fun closeAll() {
+        inlays.values.forEach(Disposer::dispose)
+        inlays.clear()
     }
 
     private fun toggleEditor(line: Int) {
@@ -61,7 +66,10 @@ class AnnotationInlays(
             model.remove(line)
             return
         }
-        val panel = buildEditorPanel(line)
+        val area = FeedbackArea("Comment on this line", COMMENT_ROWS)
+        area.text = model.textAt(line).orEmpty()
+        area.onChanged { text -> model.put(line, text) }
+        val panel = buildEditorPanel(line, area)
         val offset = editor.document.getLineEndOffset(line)
         val properties = InlayProperties().priority(0).relatesToPrecedingText(true)
         val inlay = editor.addComponentInlay(
@@ -72,25 +80,16 @@ class AnnotationInlays(
         ) ?: return
         inlays[line] = inlay
         Disposer.register(parent, inlay)
+        SwingUtilities.invokeLater { area.focus() }
     }
 
-    private fun buildEditorPanel(line: Int): JPanel {
-        val area = JBTextArea(model.textAt(line).orEmpty())
-        area.lineWrap = true
-        area.wrapStyleWord = true
-        area.rows = 2
-        area.border = JBUI.Borders.empty(4)
-        area.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(event: DocumentEvent) = model.put(line, area.text)
-            override fun removeUpdate(event: DocumentEvent) = model.put(line, area.text)
-            override fun changedUpdate(event: DocumentEvent) = model.put(line, area.text)
-        })
-
+    private fun buildEditorPanel(line: Int, area: FeedbackArea): JPanel {
         val actions = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0))
         actions.isOpaque = false
         actions.add(ActionLink("Remove comment") { toggleEditor(line) })
 
         val panel = JPanel(BorderLayout())
+        panel.isOpaque = false
         panel.border = JBUI.Borders.empty(2, 24, 6, 8)
         panel.add(area, BorderLayout.CENTER)
         panel.add(actions, BorderLayout.SOUTH)
@@ -116,6 +115,8 @@ class AnnotationInlays(
 
         override fun getTooltipText(): String = "Comment on this line"
 
+        override fun isNavigateAction(): Boolean = true
+
         override fun getClickAction(): AnAction = object : AnAction() {
             override fun actionPerformed(event: AnActionEvent) = toggleEditor(line)
         }
@@ -128,5 +129,6 @@ class AnnotationInlays(
 
     private companion object {
         const val MAX_LINES = 3000
+        const val COMMENT_ROWS = 2
     }
 }

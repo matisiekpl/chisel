@@ -21,6 +21,7 @@ class AnnotationDiffExtension : DiffExtension() {
         val model = request.getUserData(AnnotationKeys.MODEL) ?: return
         val editor = proposedEditor(viewer) ?: return
         AnnotationInlays(editor, model, viewer).install()
+        UserEditHighlighter(editor, viewer).install()
     }
 
     private fun proposedEditor(viewer: FrameDiffTool.DiffViewer): EditorEx? = when (viewer) {

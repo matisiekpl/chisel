@@ -2,6 +2,7 @@ package com.mateuszwozniak.chisel.ui.approval
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.ui.DialogWrapper.IdeModalityType
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.JBLabel
@@ -29,7 +30,7 @@ import javax.swing.event.DocumentEvent
 class QuestionDialog(
     project: Project,
     private val questions: List<UserQuestion>,
-) : DialogWrapper(project, true) {
+) : DialogWrapper(project, true, IdeModalityType.MODELESS) {
 
     enum class Outcome { ANSWER, DENY }
 
@@ -60,6 +61,7 @@ class QuestionDialog(
 
     init {
         title = if (questions.size == 1) questions.first().header.ifEmpty { "Question" } else "Questions"
+        answerAction.putValue(DEFAULT_ACTION, true)
         init()
     }
 
@@ -75,7 +77,7 @@ class QuestionDialog(
         return scroll
     }
 
-    override fun createActions(): Array<Action> = arrayOf(answerAction, denyAction)
+    override fun createActions(): Array<Action> = arrayOf(denyAction, answerAction)
 
     override fun getDimensionServiceKey(): String = "Chisel.Question"
 

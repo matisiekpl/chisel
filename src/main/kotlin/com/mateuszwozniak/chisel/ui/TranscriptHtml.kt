@@ -38,13 +38,13 @@ class TranscriptHtml(private val renderer: MarkdownRenderer, private val basePat
     private fun toolDetail(item: TranscriptItem.ToolCall): String {
         val arguments = pretty(item.input)
             .takeIf { it.isNotBlank() }
-            ?.let { "<pre><code>${escape(it)}</code></pre>" }
+            ?.let { "<pre><code>${escape(wrap(it))}</code></pre>" }
             .orEmpty()
         val result = item.result
             ?.takeIf { it.isNotBlank() }
             ?.let {
                 val marker = if (item.failed) "<p><b>Failed</b></p>" else ""
-                marker + "<pre><code>${escape(truncate(it))}</code></pre>"
+                marker + "<pre><code>${escape(wrap(truncate(it)))}</code></pre>"
             }
             .orEmpty()
         return arguments + result
@@ -65,6 +65,10 @@ class TranscriptHtml(private val renderer: MarkdownRenderer, private val basePat
         return if (line.length <= SUMMARY_LIMIT) line else line.take(SUMMARY_LIMIT).trimEnd() + "\u2026"
     }
 
+    private fun wrap(text: String): String = text.lineSequence().joinToString("\n") { line ->
+        if (line.length <= WRAP_LIMIT) line else line.chunked(WRAP_LIMIT).joinToString("\n")
+    }
+
     private fun truncate(text: String): String =
         if (text.length <= CONTENT_LIMIT) text else text.take(CONTENT_LIMIT) + "\n[truncated]"
 
@@ -76,5 +80,6 @@ class TranscriptHtml(private val renderer: MarkdownRenderer, private val basePat
     private companion object {
         const val CONTENT_LIMIT = 4000
         const val SUMMARY_LIMIT = 80
+        const val WRAP_LIMIT = 100
     }
 }
