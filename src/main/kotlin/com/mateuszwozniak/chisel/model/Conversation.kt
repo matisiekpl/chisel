@@ -27,6 +27,10 @@ class Conversation(
 
     var context: ContextUsage? = null
 
+    var remoteUrl: String? = null
+
+    var bridgeState: String? = null
+
     var costUsd: Double = 0.0
 
     var inputTokens: Long = 0

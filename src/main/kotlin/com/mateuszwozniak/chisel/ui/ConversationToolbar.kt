@@ -1,16 +1,19 @@
 package com.mateuszwozniak.chisel.ui
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.Separator
+import com.intellij.openapi.actionSystem.ToggleAction
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.ui.Messages
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
@@ -30,6 +33,8 @@ class ConversationToolbar(
     private val controller: ConversationController,
     private val onAgents: () -> Unit,
 ) {
+
+    private var remoteDialog: RemoteControlDialog? = null
 
     private val usageLabel = JBLabel().apply {
         font = JBUI.Fonts.smallFont()
@@ -67,6 +72,7 @@ class ConversationToolbar(
             action("Subagents", "Show agents delegated in this conversation", AllIcons.General.Groups) {
                 onAgents()
             },
+            remoteAction(),
             Separator.getInstance(),
             action("Export", "Save the transcript as Markdown", AllIcons.General.Export) { export() },
             action("Delete", "Delete this conversation", AllIcons.Actions.GC) { delete() },
@@ -78,6 +84,34 @@ class ConversationToolbar(
         row.add(toolbar.component, BorderLayout.WEST)
         row.add(usageLabel, BorderLayout.EAST)
         return row
+    }
+
+    private fun remoteAction(): AnAction = object :
+        ToggleAction("Remote control", "Drive this conversation from another device", AllIcons.General.Web),
+        DumbAware {
+
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+        override fun isSelected(event: AnActionEvent): Boolean =
+            controller.conversation.bridgeState == CONNECTED
+
+        override fun setSelected(event: AnActionEvent, state: Boolean) {
+            if (state) connectRemote() else controller.setRemoteControl(false)
+        }
+    }
+
+    private fun connectRemote() {
+        val dialog = RemoteControlDialog(project)
+        remoteDialog = dialog
+        Disposer.register(dialog.disposable, Disposable { remoteDialog = null })
+        controller.setRemoteControl(true)
+        dialog.show()
+    }
+
+    fun showRemote() {
+        val dialog = remoteDialog ?: return
+        val url = controller.conversation.remoteUrl
+        if (url != null) dialog.showUrl(url) else dialog.showFailure()
     }
 
     private fun compact() {
@@ -127,5 +161,6 @@ class ConversationToolbar(
         const val PLACE = "ChiselConversationToolbar"
         const val CONTINUE = "Continue"
         const val COMPACT = "/compact"
+        const val CONNECTED = "connected"
     }
 }

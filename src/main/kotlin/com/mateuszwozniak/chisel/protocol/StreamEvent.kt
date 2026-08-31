@@ -27,6 +27,8 @@ sealed interface StreamEvent {
 
     data class Compacting(val running: Boolean, val error: String?) : StreamEvent
 
+    data class BridgeState(val state: String) : StreamEvent
+
     data class TextDelta(val text: String) : StreamEvent
 
     data class ThinkingDelta(val text: String) : StreamEvent

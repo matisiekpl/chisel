@@ -79,6 +79,8 @@ class ConversationPanel(
 
     override fun onUsageChanged() = onEventDispatchThread { toolbar.showUsage() }
 
+    override fun onRemoteChanged() = onEventDispatchThread { toolbar.showRemote() }
+
     override fun onContextChanged() = onEventDispatchThread {
         input.showContext(controller.conversation.context)
     }

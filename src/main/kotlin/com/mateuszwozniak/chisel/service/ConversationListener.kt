@@ -30,5 +30,7 @@ interface ConversationListener {
 
     fun onUsageChanged() = Unit
 
+    fun onRemoteChanged() = Unit
+
     fun onCompactingChanged(running: Boolean) = Unit
 }

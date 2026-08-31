@@ -55,6 +55,9 @@ class ClaudeSession(
 
     fun contextUsage(): CompletableFuture<JsonObject?> = request("get_context_usage")
 
+    fun remoteControl(enabled: Boolean): CompletableFuture<JsonObject?> =
+        request("remote_control") { addProperty("enabled", enabled) }
+
     fun rewindFiles(messageUuid: String): CompletableFuture<JsonObject?> =
         request("rewind_files") { addProperty("user_message_id", messageUuid) }
 

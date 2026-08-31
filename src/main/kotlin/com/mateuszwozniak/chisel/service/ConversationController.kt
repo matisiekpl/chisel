@@ -172,6 +172,8 @@ class ConversationController(
     override fun onEvent(event: StreamEvent) {
         when (event) {
             is StreamEvent.SessionStarted -> adoptSession(event)
+            is StreamEvent.BridgeState -> applyBridgeState(event.state)
+
             is StreamEvent.Compacting -> applyCompacting(event)
 
             is StreamEvent.Compacted -> appendNotice(
@@ -363,13 +365,28 @@ class ConversationController(
             return
         }
         val uuid = event.uuid ?: return
-        val prompt = synchronized(this) {
+        val pending = synchronized(this) {
             conversation.transcript
                 .filterIsInstance<TranscriptItem.UserPrompt>()
                 .firstOrNull { it.messageUuid == null }
-        } ?: return
-        prompt.messageUuid = uuid
-        listeners.forEach { it.onItemUpdated(prompt) }
+        }
+        if (pending != null) {
+            pending.messageUuid = uuid
+            listeners.forEach { it.onItemUpdated(pending) }
+            return
+        }
+        adoptRemotePrompt(event, uuid)
+    }
+
+    private fun adoptRemotePrompt(event: StreamEvent.UserTurn, uuid: String) {
+        val text = event.blocks
+            .filterIsInstance<ContentBlock.Text>()
+            .joinToString("\n") { it.text }
+            .trim()
+        if (text.isEmpty()) return
+        conversation.updatedAt = System.currentTimeMillis()
+        appendItem(TranscriptItem.UserPrompt(nextId(), text, uuid))
+        changeBusy(true)
     }
 
     private fun applyTurnFinished(event: StreamEvent.TurnFinished) {
@@ -461,6 +478,25 @@ class ConversationController(
             adoptGeneratedTitle()
         }.onFailure { thisLogger().warn("Could not refresh conversation state", it) }
         drainQueue()
+    }
+
+    fun setRemoteControl(enabled: Boolean) {
+        val target = ensureSession() ?: return
+        target.remoteControl(enabled).whenComplete { payload, error ->
+            if (error != null) {
+                appendNotice("Could not change remote control: " + error.message, true)
+                conversation.remoteUrl = null
+                applyBridgeState(DISCONNECTED)
+                return@whenComplete
+            }
+            conversation.remoteUrl = if (enabled) payload?.string("session_url") else null
+            if (!enabled) applyBridgeState(DISCONNECTED) else listeners.forEach { it.onRemoteChanged() }
+        }
+    }
+
+    private fun applyBridgeState(state: String) {
+        conversation.bridgeState = state
+        listeners.forEach { it.onRemoteChanged() }
     }
 
     private fun applyCompacting(event: StreamEvent.Compacting) {
@@ -556,5 +592,6 @@ class ConversationController(
         const val TODO_TOOL = "TodoWrite"
         const val STANDARD_ERROR_LIMIT = 4000
         const val TITLE_LIMIT = 48
+        const val DISCONNECTED = "disconnected"
     }
 }

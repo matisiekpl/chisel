@@ -174,6 +174,8 @@ class StreamJsonCodec {
 
             "status" -> parseStatus(root)
 
+            "bridge_state" -> root.string("state")?.let { StreamEvent.BridgeState(it) }
+
             "compact_boundary" -> StreamEvent.Compacted(
                 root.obj("compact_metadata")?.string("trigger"),
             )
