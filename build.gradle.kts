@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.mateuszwozniak"
-version = "0.2.0"
+version = "0.2.1"
 
 dependencies {
     intellijPlatform {
@@ -52,6 +52,7 @@ intellijPlatform {
               <li>In IDEs with the Database plugin, the schema of a data source attaches to a prompt as DDL.</li>
               <li>Every conversation started in the terminal is picked up, titled by its first real prompt.</li>
               <li>Changing the model or the effort level no longer reports a failed process.</li>
+              <li>The prompt input and its badges follow the editor colours, and the file chooser uses the current platform API.</li>
             </ul>
         """.trimIndent()
         vendor {

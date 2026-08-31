@@ -10,6 +10,7 @@ import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.actionSystem.ShortcutSet
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.LogicalPosition
+import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.ide.CopyPasteManager
@@ -18,7 +19,6 @@ import com.intellij.ui.InplaceButton
 import com.intellij.ui.JBColor
 import com.intellij.util.textCompletion.TextFieldWithCompletion
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import com.mateuszwozniak.chisel.model.ContextUsage
 import com.mateuszwozniak.chisel.model.PromptAttachment
 import com.mateuszwozniak.chisel.model.QueuedPrompt
@@ -150,7 +150,7 @@ class PromptInput(
         border = JBUI.Borders.empty(6, 8, 8, 8)
         promptField.setPlaceholder("Ask a question, or type @ to reference a file")
         promptField.border = JBUI.Borders.empty(0, TEXT_INSET)
-        promptField.background = UIUtil.getTextFieldBackground()
+        promptField.background = EditorColorsManager.getInstance().globalScheme.defaultBackground
         promptField.addSettingsProvider { editor ->
             editor.setBorder(JBUI.Borders.empty())
             editor.settings.isUseSoftWraps = true
@@ -390,7 +390,7 @@ class PromptInput(
     }
 
     private fun chooseFiles() {
-        val descriptor = FileChooserDescriptorFactory.createMultipleFilesNoJarsDescriptor()
+        val descriptor = FileChooserDescriptorFactory.multiFiles()
         FileChooser.chooseFiles(descriptor, project, null).forEach { file ->
             PromptAttachment.of(Paths.get(file.path))?.let(attachments::attach)
         }
@@ -430,10 +430,10 @@ class PromptInput(
             graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
             val arc = JBUI.scale(ARC).toFloat()
             val shape = RoundRectangle2D.Float(0.5f, 0.5f, width - 1f, height - 1f, arc, arc)
-            graphics.color = UIUtil.getTextFieldBackground()
+            graphics.color = EditorColorsManager.getInstance().globalScheme.defaultBackground
             graphics.fill(shape)
             graphics.color = if (focused) JBUI.CurrentTheme.Focus.focusColor() else JBColor.border()
-            graphics.stroke = BasicStroke(if (focused) 2f else 1f)
+            graphics.stroke = BasicStroke(1f)
             graphics.draw(shape)
             graphics.dispose()
         }
