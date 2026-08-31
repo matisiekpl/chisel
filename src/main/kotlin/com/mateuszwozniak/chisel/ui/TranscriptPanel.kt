@@ -9,10 +9,12 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.AsyncProcessIcon
@@ -27,6 +29,8 @@ import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.FlowLayout
 import java.awt.datatransfer.StringSelection
+import java.net.URI
+import java.nio.file.Paths
 import javax.swing.Icon
 import javax.swing.JPanel
 import javax.swing.SwingUtilities
@@ -46,9 +50,11 @@ class TranscriptPanel(
     private val busyBar = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), JBUI.scale(4)))
 
     private var contentDisposable = Disposer.newDisposable("ChiselTranscriptContent")
+    private var following = true
 
     init {
         list.isOpaque = false
+        list.border = JBUI.Borders.empty(LIST_PADDING, 0)
         busyBar.isOpaque = false
         busyBar.border = JBUI.Borders.empty(8, 12, 10, 12)
         busyBar.add(busyIcon)
@@ -57,6 +63,14 @@ class TranscriptPanel(
 
         add(scroll, BorderLayout.CENTER)
         add(busyBar, BorderLayout.SOUTH)
+
+        scroll.addMouseWheelListener { event ->
+            if (event.wheelRotation < 0) following = false
+            else SwingUtilities.invokeLater { following = isScrolledToBottom() }
+        }
+        scroll.verticalScrollBar.addAdjustmentListener { event ->
+            if (event.valueIsAdjusting) following = isScrolledToBottom()
+        }
 
         Disposer.register(this, busyIcon)
         Disposer.register(this, contentDisposable)
@@ -105,6 +119,7 @@ class TranscriptPanel(
     }
 
     private fun rebuild() {
+        following = true
         Disposer.dispose(contentDisposable)
         contentDisposable = Disposer.newDisposable("ChiselTranscriptContent")
         Disposer.register(this, contentDisposable)
@@ -116,9 +131,12 @@ class TranscriptPanel(
     private fun addView(item: TranscriptItem) {
         if (item is TranscriptItem.TurnSummary || item is TranscriptItem.Thinking) return
         val view = TranscriptItemView(html, item, contentDisposable)
+        view.onRendered = { if (following) scrollToBottom() }
         when (item) {
-            is TranscriptItem.UserPrompt ->
+            is TranscriptItem.UserPrompt -> {
                 view.onContextMenu { component, x, y -> showPromptMenu(item, component, x, y) }
+                view.onLinkClicked { link -> openAttachment(link) }
+            }
             is TranscriptItem.ToolCall -> view.onClicked { showDetail(item) }
             else -> Unit
         }
@@ -162,16 +180,22 @@ class TranscriptPanel(
             override fun actionPerformed(event: AnActionEvent) = run()
         }
 
+    private fun openAttachment(link: String) {
+        val path = runCatching { Paths.get(URI(link)) }.getOrNull() ?: return
+        val file = LocalFileSystem.getInstance().refreshAndFindFileByPath(path.toString()) ?: return
+        FileEditorManager.getInstance(project).openFile(file, true)
+    }
+
     private fun showDetail(item: TranscriptItem.ToolCall) {
         TranscriptDetailDialog(project, item.name, html.detail(item)).show()
     }
 
     private fun mutate(force: Boolean = false, action: () -> Unit) {
-        val atBottom = force || isScrolledToBottom()
+        if (force) following = true
         action()
         list.revalidate()
         list.repaint()
-        if (atBottom) SwingUtilities.invokeLater { scrollToBottom() }
+        if (following) SwingUtilities.invokeLater { scrollToBottom() }
     }
 
     private fun isScrolledToBottom(): Boolean {
@@ -187,6 +211,7 @@ class TranscriptPanel(
     private companion object {
         const val PLACE = "ChiselTranscript"
         const val LIST_GAP = 6
+        const val LIST_PADDING = 8
         const val MERGE_MILLIS = 50
         const val BOTTOM_TOLERANCE = 24
     }

@@ -8,6 +8,7 @@ import com.intellij.ui.dsl.builder.Cell
 import com.intellij.ui.dsl.builder.Row
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.panel
+import com.mateuszwozniak.chisel.model.AgentMode
 import com.mateuszwozniak.chisel.model.AgentModel
 import com.mateuszwozniak.chisel.model.EffortLevel
 import com.mateuszwozniak.chisel.state.ChiselSettings
@@ -18,6 +19,7 @@ class ChiselConfigurable : BoundConfigurable("Chisel") {
     private val settings = ChiselSettings.getInstance()
 
     override fun createPanel(): DialogPanel = panel {
+        row("Default mode:") { modeBox(settings::defaultMode) }
         group("Plan") {
             row("Model:") { modelBox(settings::planModel) }
             row("Effort:") { effortBox(settings::planEffort) }
@@ -30,6 +32,14 @@ class ChiselConfigurable : BoundConfigurable("Chisel") {
             comment("Applies to conversations started after the change.")
         }
     }
+
+    private fun Row.modeBox(
+        property: KMutableProperty0<AgentMode>,
+    ): Cell<ComboBox<AgentMode>> = comboBox(AgentMode.entries.toList())
+        .applyToComponent {
+            renderer = SimpleListCellRenderer.create("") { mode: AgentMode -> mode.label }
+        }
+        .bind(property)
 
     private fun Row.modelBox(
         property: KMutableProperty0<AgentModel>,

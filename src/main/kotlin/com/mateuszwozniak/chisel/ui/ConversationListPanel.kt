@@ -21,6 +21,7 @@ import com.intellij.ui.SearchTextField
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.treeStructure.Tree
 import com.intellij.util.ui.JBUI
+import com.mateuszwozniak.chisel.cli.ClaudeSessions
 import com.mateuszwozniak.chisel.service.ConversationController
 import com.mateuszwozniak.chisel.service.ConversationManager
 import com.mateuszwozniak.chisel.service.ConversationsListener
@@ -54,7 +55,7 @@ class ConversationListPanel(private val project: Project) :
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 
         override fun update(event: AnActionEvent) {
-            event.presentation.isEnabled = selection() != null
+            event.presentation.isEnabled = selected().size == 1
         }
 
         override fun actionPerformed(event: AnActionEvent) = rename()
@@ -66,7 +67,7 @@ class ConversationListPanel(private val project: Project) :
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 
         override fun update(event: AnActionEvent) {
-            event.presentation.isEnabled = selection() != null
+            event.presentation.isEnabled = selected().isNotEmpty()
         }
 
         override fun actionPerformed(event: AnActionEvent) = delete()
@@ -76,19 +77,20 @@ class ConversationListPanel(private val project: Project) :
         root.add(group)
         tree.isRootVisible = false
         tree.showsRootHandles = true
-        tree.selectionModel.selectionMode = TreeSelectionModel.SINGLE_TREE_SELECTION
+        tree.selectionModel.selectionMode = TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION
         tree.cellRenderer = ConversationTreeRenderer()
         tree.emptyText.text = "No conversations"
         tree.border = JBUI.Borders.empty(4, 8, 0, 0)
         tree.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(event: MouseEvent) {
                 if (!SwingUtilities.isLeftMouseButton(event)) return
-                selection()?.let { ConversationTabs.open(project, it) }
+                if (event.isShiftDown || event.isControlDown || event.isMetaDown) return
+                selected().singleOrNull()?.let { ConversationTabs.open(project, it) }
             }
         })
         tree.addMouseListener(object : PopupHandler() {
             override fun invokePopup(component: Component, x: Int, y: Int) {
-                if (selection() == null) return
+                if (selected().isEmpty()) return
                 ActionManager.getInstance()
                     .createActionPopupMenu(PLACE, contextMenu())
                     .component
@@ -125,7 +127,6 @@ class ConversationListPanel(private val project: Project) :
     private fun buildToolbar(): JComponent {
         val actions = DefaultActionGroup(
             NewConversationAction(project),
-            ResumeSessionAction(project),
             renameAction,
             deleteAction,
             Separator.getInstance(),
@@ -139,7 +140,7 @@ class ConversationListPanel(private val project: Project) :
     private fun contextMenu(): ActionGroup = DefaultActionGroup(renameAction, deleteAction)
 
     private fun rename() {
-        val controller = selection() ?: return
+        val controller = selected().singleOrNull() ?: return
         val title = Messages.showInputDialog(
             project,
             "Conversation name:",
@@ -154,40 +155,76 @@ class ConversationListPanel(private val project: Project) :
     }
 
     private fun delete() {
-        val controller = selection() ?: return
-        val confirmed = Messages.showYesNoDialog(
-            project,
-            "Delete " + controller.conversation.title + " and its transcript?",
-            "Delete Conversation",
-            Messages.getWarningIcon(),
-        )
-        if (confirmed != Messages.YES) return
-        ConversationTabs.close(project, controller)
-        manager.delete(controller)
+        val controllers = selected()
+        if (controllers.isEmpty()) return
+        val resumable = controllers.any { it.conversation.sessionId != null }
+        var removeSessions = false
+        val confirmed = if (!resumable) {
+            Messages.showYesNoDialog(
+                project,
+                deleteMessage(controllers),
+                deleteTitle(controllers),
+                Messages.getWarningIcon(),
+            ) == Messages.YES
+        } else {
+            Messages.showCheckboxMessageDialog(
+                deleteMessage(controllers),
+                deleteTitle(controllers),
+                arrayOf("Delete", "Cancel"),
+                "Also delete the Claude CLI session files",
+                false,
+                0,
+                1,
+                Messages.getWarningIcon(),
+            ) { exitCode, checkbox ->
+                removeSessions = checkbox.isSelected
+                exitCode
+            } == 0
+        }
+        if (!confirmed) return
+        controllers.forEach { controller ->
+            ConversationTabs.close(project, controller)
+            if (removeSessions) {
+                controller.conversation.sessionId?.let { ClaudeSessions.delete(project.basePath, it) }
+            }
+            manager.delete(controller)
+        }
     }
 
+    private fun deleteMessage(controllers: List<ConversationController>): String {
+        val single = controllers.singleOrNull()
+        if (single == null) return "Delete " + controllers.size + " conversations and their transcripts?"
+        return "Delete " + single.conversation.title + " and its transcript?"
+    }
+
+    private fun deleteTitle(controllers: List<ConversationController>): String =
+        if (controllers.size == 1) "Delete Conversation" else "Delete Conversations"
+
     private fun refresh() {
-        val selected = selection()
+        val previous = selected()
         val filter = searchField.text.trim()
         group.removeAllChildren()
-        manager.conversations()
+        manager.started()
             .filter { filter.isEmpty() || it.conversation.title.contains(filter, ignoreCase = true) }
             .forEach { group.add(DefaultMutableTreeNode(it)) }
         treeModel.reload()
         tree.expandPath(TreePath(arrayOf<Any>(root, group)))
-        selected?.let { select(it) }
+        select(previous)
     }
 
-    private fun select(controller: ConversationController) {
-        val node = (0 until group.childCount)
+    private fun select(controllers: List<ConversationController>) {
+        if (controllers.isEmpty()) return
+        val paths = (0 until group.childCount)
             .map { group.getChildAt(it) }
             .filterIsInstance<DefaultMutableTreeNode>()
-            .firstOrNull { it.userObject === controller } ?: return
-        tree.selectionPath = TreePath(node.path)
+            .filter { it.userObject in controllers }
+            .map { TreePath(it.path) }
+        if (paths.isNotEmpty()) tree.selectionPaths = paths.toTypedArray()
     }
 
-    private fun selection(): ConversationController? =
-        (tree.lastSelectedPathComponent as? DefaultMutableTreeNode)?.userObject as? ConversationController
+    private fun selected(): List<ConversationController> = tree.selectionPaths
+        .orEmpty()
+        .mapNotNull { (it.lastPathComponent as? DefaultMutableTreeNode)?.userObject as? ConversationController }
 
     private class ConversationTreeRenderer : ColoredTreeCellRenderer() {
 

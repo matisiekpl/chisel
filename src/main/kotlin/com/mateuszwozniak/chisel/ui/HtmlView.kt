@@ -10,6 +10,7 @@ import java.awt.Cursor
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.JComponent
+import javax.swing.event.HyperlinkEvent
 
 class HtmlView(parent: Disposable) {
 
@@ -31,6 +32,12 @@ class HtmlView(parent: Disposable) {
 
     fun setHtml(html: String) {
         pane.text = "<html><body>$html</body></html>"
+    }
+
+    fun onLinkClicked(action: (String) -> Unit) {
+        pane.addHyperlinkListener { event ->
+            if (event.eventType == HyperlinkEvent.EventType.ACTIVATED) action(event.description)
+        }
     }
 
     fun onClicked(action: () -> Unit) {

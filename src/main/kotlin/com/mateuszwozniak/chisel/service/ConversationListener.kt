@@ -1,5 +1,6 @@
 package com.mateuszwozniak.chisel.service
 
+import com.mateuszwozniak.chisel.model.QueuedPrompt
 import com.mateuszwozniak.chisel.model.TodoItem
 import com.mateuszwozniak.chisel.model.TranscriptItem
 
@@ -17,5 +18,9 @@ interface ConversationListener {
 
     fun onTitleChanged(title: String) = Unit
 
+    fun onSessionStarted() = Unit
+
     fun onOptionsChanged() = Unit
+
+    fun onQueueChanged(queued: List<QueuedPrompt>) = Unit
 }

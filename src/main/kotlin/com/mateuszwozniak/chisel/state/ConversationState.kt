@@ -25,6 +25,7 @@ class ConversationState :
 
     class Model : BaseState() {
         var entries by list<ConversationEntry>()
+        var dismissedSessions by list<String>()
         var selectedId by string()
     }
 

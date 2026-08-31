@@ -6,6 +6,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.mateuszwozniak.chisel.cli.ClaudeSessions
 import com.mateuszwozniak.chisel.model.AgentMode
 import com.mateuszwozniak.chisel.model.AgentModel
 import com.mateuszwozniak.chisel.model.Conversation
@@ -28,6 +29,9 @@ class ConversationManager(private val project: Project) : Disposable {
 
     fun conversations(): List<ConversationController> = controllers.values.toList()
 
+    fun started(): List<ConversationController> =
+        controllers.values.filter { it.conversation.transcript.isNotEmpty() }
+
     fun restore(): List<ConversationController> {
         if (restored) return conversations()
         restored = true
@@ -47,24 +51,53 @@ class ConversationManager(private val project: Project) : Disposable {
             conversation.transcript.addAll(store.load(id))
             register(conversation)
         }
+        importTerminalSessions()
         if (controllers.isEmpty()) create()
         return conversations()
+    }
+
+    private fun importTerminalSessions() {
+        val state = ConversationState.getInstance(project).state
+        val known = controllers.values.mapNotNull { it.conversation.sessionId }.toSet() +
+            state.dismissedSessions.toSet()
+        val settings = ChiselSettings.getInstance()
+        ClaudeSessions.list(project.basePath)
+            .filterNot { it.id in known }
+            .take(IMPORT_LIMIT)
+            .forEach { session ->
+                val transcript = ClaudeSessions.transcriptOf(project.basePath, session.id)
+                if (transcript.isEmpty()) return@forEach
+                val mode = settings.defaultMode
+                val conversation = Conversation(
+                    UUID.randomUUID().toString(),
+                    session.title,
+                    mode,
+                    settings.modelFor(mode),
+                    settings.effortFor(mode),
+                    session.id,
+                )
+                conversation.transcript.addAll(transcript)
+                register(conversation)
+            }
     }
 
     fun create(): ConversationController = create(null, nextTitle())
 
     fun create(sessionId: String?, title: String): ConversationController {
         val settings = ChiselSettings.getInstance()
-        val controller = register(
-            Conversation(
-                UUID.randomUUID().toString(),
-                title,
-                AgentMode.PLAN,
-                settings.modelFor(AgentMode.PLAN),
-                settings.effortFor(AgentMode.PLAN),
-                sessionId,
-            )
+        val mode = settings.defaultMode
+        val conversation = Conversation(
+            UUID.randomUUID().toString(),
+            title,
+            mode,
+            settings.modelFor(mode),
+            settings.effortFor(mode),
+            sessionId,
         )
+        if (sessionId != null) {
+            conversation.transcript.addAll(ClaudeSessions.transcriptOf(project.basePath, sessionId))
+        }
+        val controller = register(conversation)
         persist()
         notifyChanged()
         return controller
@@ -78,6 +111,7 @@ class ConversationManager(private val project: Project) : Disposable {
 
     fun delete(controller: ConversationController) {
         if (controllers.remove(controller.conversation.id) == null) return
+        controller.conversation.sessionId?.let(::dismiss)
         store.delete(controller.conversation.id)
         Disposer.dispose(controller)
         persist()
@@ -94,7 +128,7 @@ class ConversationManager(private val project: Project) : Disposable {
 
     fun persist() {
         val state = ConversationState.getInstance(project).state
-        state.entries = controllers.values.map { controller ->
+        state.entries = controllers.values.filter { it.conversation.transcript.isNotEmpty() }.map { controller ->
             store.save(controller.conversation)
             ConversationEntry().apply {
                 id = controller.conversation.id
@@ -114,6 +148,11 @@ class ConversationManager(private val project: Project) : Disposable {
         listeners.clear()
     }
 
+    private fun dismiss(sessionId: String) {
+        val dismissed = ConversationState.getInstance(project).state.dismissedSessions
+        if (!dismissed.contains(sessionId)) dismissed.add(sessionId)
+    }
+
     private fun register(conversation: Conversation): ConversationController {
         val controller = ConversationController(project, conversation, router)
         controllers[conversation.id] = controller
@@ -127,6 +166,8 @@ class ConversationManager(private val project: Project) : Disposable {
                 persist()
                 notifyChanged()
             }
+
+            override fun onSessionStarted() = persist()
         })
         return controller
     }
@@ -135,16 +176,13 @@ class ConversationManager(private val project: Project) : Disposable {
         listeners.forEach { it.onConversationsChanged() }
     }
 
-    private fun nextTitle(): String {
-        val used = controllers.values.mapNotNull {
-            it.conversation.title.removePrefix(TITLE_PREFIX).toIntOrNull()
-        }
-        return TITLE_PREFIX + ((used.maxOrNull() ?: 0) + 1)
-    }
+    private fun nextTitle(): String = NEW_TITLE
 
     companion object {
 
-        private const val TITLE_PREFIX = "Chat "
+        private const val NEW_TITLE = "New chat"
+
+        private const val IMPORT_LIMIT = 15
 
         fun getInstance(project: Project): ConversationManager = project.service()
     }

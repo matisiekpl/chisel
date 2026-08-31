@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.mateuszwozniak.chisel.model.PromptAttachment
 import com.mateuszwozniak.chisel.protocol.ContentBlock
 import com.mateuszwozniak.chisel.protocol.IncomingFrame
 import com.mateuszwozniak.chisel.protocol.PermissionRequest
@@ -29,14 +30,18 @@ class StreamJsonCodec {
         }
     }
 
-    fun userMessage(text: String): String {
-        val block = JsonObject().apply {
-            addProperty("type", "text")
-            addProperty("text", text)
-        }
+    fun userMessage(text: String, attachments: List<PromptAttachment>): String {
+        val content = JsonArray()
+        attachments.filter { it.isImage }.mapNotNull(::imageBlock).forEach(content::add)
+        content.add(
+            JsonObject().apply {
+                addProperty("type", "text")
+                addProperty("text", withFileReferences(text, attachments.filterNot { it.isImage }))
+            }
+        )
         val message = JsonObject().apply {
             addProperty("role", "user")
-            add("content", JsonArray().apply { add(block) })
+            add("content", content)
         }
         val frame = JsonObject().apply {
             addProperty("type", "user")
@@ -44,6 +49,27 @@ class StreamJsonCodec {
             add("parent_tool_use_id", null)
         }
         return gson.toJson(frame)
+    }
+
+    private fun withFileReferences(text: String, files: List<PromptAttachment>): String {
+        if (files.isEmpty()) return text
+        val references = files.joinToString("\n") { "Attached file: " + it.path }
+        return if (text.isBlank()) references else text + "\n\n" + references
+    }
+
+    private fun imageBlock(attachment: PromptAttachment): JsonObject? {
+        val encoded = attachment.encode() ?: return null
+        return JsonObject().apply {
+            addProperty("type", "image")
+            add(
+                "source",
+                JsonObject().apply {
+                    addProperty("type", "base64")
+                    addProperty("media_type", attachment.mediaType)
+                    addProperty("data", encoded)
+                },
+            )
+        }
     }
 
     fun controlRequest(requestId: String, request: JsonObject): String {

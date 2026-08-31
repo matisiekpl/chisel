@@ -16,6 +16,7 @@ import com.intellij.openapi.ui.DialogWrapper.IdeModalityType
 import com.intellij.util.ui.JBUI
 import com.mateuszwozniak.chisel.model.LineAnnotation
 import com.mateuszwozniak.chisel.protocol.WriteToolInput
+import com.mateuszwozniak.chisel.ui.Shortcuts
 import java.awt.Dimension
 import java.awt.event.ActionEvent
 import java.nio.file.Files
@@ -32,34 +33,37 @@ class EditApprovalDialog(
     enum class Outcome { ACCEPT, FEEDBACK, REJECT }
 
     private val model = AnnotationModel()
+    private val fileText: String
     private val proposedDocument: Document
     private val originalProposed: String
     private val diffPanel: DiffRequestPanel
 
-    private val submitAction = object : DialogWrapperAction(ACCEPT_LABEL) {
-        override fun doAction(event: ActionEvent) {
-            outcome = if (hasChanges()) Outcome.FEEDBACK else Outcome.ACCEPT
-            close(OK_EXIT_CODE)
+    private val submitAction =
+        object : DialogWrapperAction(Shortcuts.labelled(ACCEPT_LABEL, Shortcuts.submitLabel())) {
+            override fun doAction(event: ActionEvent) = submit()
         }
-    }
 
-    private val rejectAction = object : DialogWrapperAction("Reject") {
-        override fun doAction(event: ActionEvent) {
-            outcome = Outcome.REJECT
-            close(CANCEL_EXIT_CODE)
+    private val rejectAction =
+        object : DialogWrapperAction(Shortcuts.labelled("Reject", Shortcuts.rejectLabel())) {
+            override fun doAction(event: ActionEvent) = doCancelAction()
         }
-    }
 
-    private val revertAction = object : DialogWrapperAction("Revert changes") {
-        override fun doAction(event: ActionEvent) = revert()
-    }
+    private val commentAction =
+        object : DialogWrapperAction(Shortcuts.labelled(COMMENT_LABEL, Shortcuts.commentLabel())) {
+            override fun doAction(event: ActionEvent) = model.requestComment()
+        }
+
+    private val revertAction =
+        object : DialogWrapperAction(Shortcuts.labelled("Revert changes", Shortcuts.revertLabel())) {
+            override fun doAction(event: ActionEvent) = revert()
+        }
 
     var outcome: Outcome = Outcome.REJECT
         private set
 
     init {
         title = "Review write: $displayPath"
-        val fileText = readCurrentText()
+        fileText = readCurrentText()
         val fileType = FileTypeManager.getInstance().getFileTypeByFileName(displayPath)
         val factory = DiffContentFactory.getInstance()
         val currentContent = factory.create(project, input.currentSide(fileText), fileType)
@@ -82,7 +86,20 @@ class EditApprovalDialog(
 
         submitAction.putValue(DEFAULT_ACTION, true)
         init()
+        Shortcuts.install(rootPane, Shortcuts.submit()) { submit() }
+        Shortcuts.install(rootPane, Shortcuts.revert()) { revert() }
+        Shortcuts.install(rootPane, Shortcuts.reject()) { doCancelAction() }
         updateActions()
+    }
+
+    override fun doCancelAction() {
+        outcome = Outcome.REJECT
+        super.doCancelAction()
+    }
+
+    private fun submit() {
+        outcome = if (hasChanges()) Outcome.FEEDBACK else Outcome.ACCEPT
+        close(OK_EXIT_CODE)
     }
 
     fun annotations(): List<LineAnnotation> = model.all()
@@ -101,14 +118,24 @@ class EditApprovalDialog(
 
     override fun createActions(): Array<Action> = arrayOf(rejectAction, submitAction)
 
-    override fun createLeftSideActions(): Array<Action> = arrayOf(revertAction)
+    override fun createLeftSideActions(): Array<Action> = arrayOf(commentAction, revertAction)
 
     override fun getDimensionServiceKey(): String = "Chisel.EditApproval"
 
     private fun updateActions() {
         val changed = hasChanges()
-        submitAction.putValue(Action.NAME, if (changed) ADJUST_LABEL else ACCEPT_LABEL)
+        submitAction.putValue(
+            Action.NAME,
+            Shortcuts.labelled(if (changed) ADJUST_LABEL else ACCEPT_LABEL, Shortcuts.submitLabel()),
+        )
         getButton(revertAction)?.isVisible = changed
+        commentAction.putValue(
+            Action.NAME,
+            Shortcuts.labelled(
+                if (model.hasCommentAtCaret()) EDIT_COMMENT_LABEL else COMMENT_LABEL,
+                Shortcuts.commentLabel(),
+            ),
+        )
     }
 
     private fun revert() {
@@ -125,6 +152,8 @@ class EditApprovalDialog(
 
     private companion object {
         const val ACCEPT_LABEL = "Accept"
+        const val COMMENT_LABEL = "Comment"
+        const val EDIT_COMMENT_LABEL = "Edit comment"
         const val ADJUST_LABEL = "Adjust"
         const val WIDTH = 1000
         const val HEIGHT = 640

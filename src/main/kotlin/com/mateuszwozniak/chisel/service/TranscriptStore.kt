@@ -1,5 +1,6 @@
 package com.mateuszwozniak.chisel.service
 
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.intellij.openapi.application.PathManager
@@ -52,6 +53,7 @@ class TranscriptStore(private val project: Project) {
                 addProperty("kind", "user")
                 addProperty("text", item.text)
                 addProperty("uuid", item.messageUuid)
+                add("attachments", JsonArray().apply { item.attachments.forEach(::add) })
             }
 
             is TranscriptItem.AssistantText -> {
@@ -92,7 +94,14 @@ class TranscriptStore(private val project: Project) {
     private fun toItem(json: JsonObject): TranscriptItem? {
         val id = json.string("id") ?: return null
         return when (json.string("kind")) {
-            "user" -> TranscriptItem.UserPrompt(id, json.string("text").orEmpty(), json.string("uuid"))
+            "user" -> TranscriptItem.UserPrompt(
+                id,
+                json.string("text").orEmpty(),
+                json.string("uuid"),
+                json.get("attachments")?.takeIf { it.isJsonArray }?.asJsonArray
+                    ?.mapNotNull { it.takeIf { element -> element.isJsonPrimitive }?.asString }
+                    .orEmpty(),
+            )
             "assistant" -> TranscriptItem.AssistantText(id, json.string("text").orEmpty())
             "thinking" -> TranscriptItem.Thinking(id, json.string("text").orEmpty())
 

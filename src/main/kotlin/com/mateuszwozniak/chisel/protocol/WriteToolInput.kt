@@ -12,6 +12,7 @@ sealed interface WriteToolInput {
 
     data class Create(override val filePath: String, val content: String) : WriteToolInput {
         override fun currentSide(fileText: String): String = fileText
+
         override fun proposedSide(fileText: String): String = content
     }
 
@@ -34,6 +35,7 @@ sealed interface WriteToolInput {
         val source: String,
     ) : WriteToolInput {
         override fun currentSide(fileText: String): String = ""
+
         override fun proposedSide(fileText: String): String = source
     }
 

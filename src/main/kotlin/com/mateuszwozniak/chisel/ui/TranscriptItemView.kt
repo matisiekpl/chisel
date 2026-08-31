@@ -68,6 +68,8 @@ class TranscriptItemView(
         canvas.dispose()
     }
 
+    var onRendered: () -> Unit = {}
+
     fun refresh() {
         val chip = badge
         if (chip != null) {
@@ -78,10 +80,18 @@ class TranscriptItemView(
         ApplicationManager.getApplication().executeOnPooledThread {
             val rendered = runCatching { html.render(item) }.getOrElse { "" }
             ApplicationManager.getApplication().invokeLater(
-                { if (generation.get() == version) view?.setHtml(rendered) },
+                {
+                    if (generation.get() != version) return@invokeLater
+                    view?.setHtml(rendered)
+                    onRendered()
+                },
                 ModalityState.defaultModalityState(),
             )
         }
+    }
+
+    fun onLinkClicked(action: (String) -> Unit) {
+        view?.onLinkClicked(action)
     }
 
     fun onClicked(action: () -> Unit) {

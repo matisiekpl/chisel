@@ -3,6 +3,7 @@ package com.mateuszwozniak.chisel.cli
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.mateuszwozniak.chisel.model.TerminalSession
+import com.mateuszwozniak.chisel.model.TranscriptItem
 import com.mateuszwozniak.chisel.protocol.bool
 import com.mateuszwozniak.chisel.protocol.obj
 import com.mateuszwozniak.chisel.protocol.string
@@ -29,6 +30,16 @@ object ClaudeSessions {
                     .toList()
             }
         }.getOrDefault(emptyList())
+    }
+
+    fun transcriptOf(projectPath: String?, sessionId: String): List<TranscriptItem> {
+        val directory = directoryFor(projectPath) ?: return emptyList()
+        return SessionTranscript(directory.resolve(sessionId + SUFFIX)).read()
+    }
+
+    fun delete(projectPath: String?, sessionId: String) {
+        val directory = directoryFor(projectPath) ?: return
+        runCatching { Files.deleteIfExists(directory.resolve(sessionId + SUFFIX)) }
     }
 
     private fun directoryFor(projectPath: String?): Path? {

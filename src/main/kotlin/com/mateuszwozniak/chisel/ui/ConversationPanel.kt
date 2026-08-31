@@ -5,12 +5,14 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.mateuszwozniak.chisel.model.QueuedPrompt
 import com.mateuszwozniak.chisel.model.TodoItem
 import com.mateuszwozniak.chisel.service.ConversationController
 import com.mateuszwozniak.chisel.service.ConversationListener
 import com.mateuszwozniak.chisel.ui.approval.RewindConfirmationDialog
 import com.mateuszwozniak.chisel.util.ProjectPaths
 import java.awt.BorderLayout
+import javax.swing.JComponent
 import javax.swing.JPanel
 
 class ConversationPanel(
@@ -26,11 +28,14 @@ class ConversationPanel(
     private val input = PromptInput(
         project,
         options,
-        { controller.sendPrompt(it) },
+        { text, attachments -> controller.sendPrompt(text, attachments) },
         { controller.interrupt() },
     )
 
     init {
+        input.onQueueRemove = { prompt -> controller.dropQueued(prompt) }
+        input.onQueuePop = { controller.popLastQueued() }
+        input.onHistory = { index -> controller.promptAt(index) }
         val center = JPanel(BorderLayout())
         center.add(todoPanel, BorderLayout.NORTH)
         center.add(transcript, BorderLayout.CENTER)
@@ -41,6 +46,7 @@ class ConversationPanel(
         Disposer.register(this, transcript)
         controller.addListener(this)
         todoPanel.update(controller.conversation.todos.toList())
+        input.showQueue(controller.queued())
     }
 
     override fun onTodosChanged(todos: List<TodoItem>) = onEventDispatchThread {
@@ -51,12 +57,22 @@ class ConversationPanel(
         options.refresh()
     }
 
+    override fun onQueueChanged(queued: List<QueuedPrompt>) = onEventDispatchThread {
+        input.showQueue(queued)
+    }
+
     override fun onBusyChanged(busy: Boolean) = onEventDispatchThread {
         input.showBusy(busy)
     }
 
     override fun onTitleChanged(title: String) = onEventDispatchThread {
         ConversationTabs.retitle(project, controller)
+    }
+
+    val focusTarget: JComponent get() = input.focusTarget
+
+    fun focusInput() {
+        input.requestFocusOnField()
     }
 
     override fun dispose() {

@@ -10,6 +10,7 @@ sealed interface TranscriptItem {
         override val id: String,
         val text: String,
         var messageUuid: String? = null,
+        val attachments: List<String> = emptyList(),
     ) : TranscriptItem
 
     class AssistantText(override val id: String, var text: String = "") : TranscriptItem

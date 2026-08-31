@@ -6,6 +6,7 @@ import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.util.ui.JBUI
+import com.mateuszwozniak.chisel.ui.Shortcuts
 import java.awt.BorderLayout
 import java.awt.Dimension
 import javax.swing.JComponent
@@ -20,8 +21,9 @@ class RewindConfirmationDialog(
 
     init {
         title = if (editing) "Edit message" else "Rewind conversation"
-        setOKButtonText(if (editing) "Edit" else "Rewind")
+        setOKButtonText(Shortcuts.labelled(if (editing) "Edit" else "Rewind", Shortcuts.submitLabel()))
         init()
+        Shortcuts.install(rootPane, Shortcuts.submit()) { doOKAction() }
     }
 
     override fun createCenterPanel(): JComponent {

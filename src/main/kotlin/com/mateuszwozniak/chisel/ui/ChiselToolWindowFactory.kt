@@ -1,5 +1,6 @@
 package com.mateuszwozniak.chisel.ui
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
@@ -37,17 +38,34 @@ class ChiselToolWindowFactory : ToolWindowFactory, DumbAware {
                 event.content.getUserData(ConversationTabs.CONTROLLER)?.let {
                     state.selectedId = it.conversation.id
                 }
+                ConversationTabs.focusInput(event.content)
             }
 
             override fun contentRemoved(event: ContentManagerEvent) {
                 val controller = event.content.getUserData(ConversationTabs.CONTROLLER)
                 if (controller != null && controller.conversation.transcript.isEmpty()) {
                     manager.delete(controller)
-                    return
+                } else {
+                    manager.persist()
                 }
-                manager.persist()
+                openFreshWhenEmpty(project, toolWindow, manager)
             }
         })
+    }
+
+    private fun openFreshWhenEmpty(
+        project: Project,
+        toolWindow: ToolWindow,
+        manager: ConversationManager,
+    ) {
+        ApplicationManager.getApplication().invokeLater(
+            {
+                if (project.isDisposed || toolWindow.isDisposed) return@invokeLater
+                if (toolWindow.contentManager.contentCount > 0) return@invokeLater
+                ConversationTabs.add(project, toolWindow, manager.create())
+            },
+            project.disposed,
+        )
     }
 
     private fun showMissingCli(toolWindow: ToolWindow) {

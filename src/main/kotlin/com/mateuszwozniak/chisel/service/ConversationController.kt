@@ -12,6 +12,8 @@ import com.mateuszwozniak.chisel.cli.SessionStart
 import com.mateuszwozniak.chisel.model.AgentMode
 import com.mateuszwozniak.chisel.model.AgentModel
 import com.mateuszwozniak.chisel.model.EffortLevel
+import com.mateuszwozniak.chisel.model.PromptAttachment
+import com.mateuszwozniak.chisel.model.QueuedPrompt
 import com.mateuszwozniak.chisel.model.Conversation
 import com.mateuszwozniak.chisel.model.TodoItem
 import com.mateuszwozniak.chisel.model.TodoStatus
@@ -35,12 +37,14 @@ class ConversationController(
 ) : SessionListener, Disposable {
 
     private val listeners = CopyOnWriteArrayList<ConversationListener>()
+    private val queued = CopyOnWriteArrayList<QueuedPrompt>()
     private val streamingItems = mutableListOf<TranscriptItem>()
     private val toolCalls = mutableMapOf<String, TranscriptItem.ToolCall>()
     private val itemCounter = AtomicLong()
     private val standardError = StringBuilder()
 
     private var session: ClaudeSession? = null
+    private var resumedSessionId: String? = null
 
     @Volatile
     var busy: Boolean = false
@@ -54,12 +58,32 @@ class ConversationController(
         listeners.remove(listener)
     }
 
-    fun sendPrompt(text: String) {
-        val target = ensureSession() ?: return
-        adoptTitle(text)
-        appendItem(TranscriptItem.UserPrompt(nextId(), text))
-        changeBusy(true)
-        target.prompt(text)
+    fun sendPrompt(text: String, attachments: List<PromptAttachment> = emptyList()) {
+        if (busy) {
+            queued.add(QueuedPrompt(text, attachments))
+            notifyQueue()
+            return
+        }
+        dispatch(QueuedPrompt(text, attachments))
+    }
+
+    fun queued(): List<QueuedPrompt> = queued.toList()
+
+    fun dropQueued(prompt: QueuedPrompt) {
+        if (queued.remove(prompt)) notifyQueue()
+    }
+
+    fun promptAt(index: Int): String? = conversation.transcript
+        .filterIsInstance<TranscriptItem.UserPrompt>()
+        .asReversed()
+        .getOrNull(index)
+        ?.text
+
+    fun popLastQueued(): QueuedPrompt? {
+        val last = queued.lastOrNull() ?: return null
+        queued.remove(last)
+        notifyQueue()
+        return last
     }
 
     fun changeMode(mode: AgentMode) {
@@ -84,6 +108,10 @@ class ConversationController(
     }
 
     fun interrupt() {
+        if (queued.isNotEmpty()) {
+            queued.clear()
+            notifyQueue()
+        }
         session?.takeIf { it.isRunning() }?.interrupt()
     }
 
@@ -132,7 +160,7 @@ class ConversationController(
 
     override fun onEvent(event: StreamEvent) {
         when (event) {
-            is StreamEvent.SessionStarted -> conversation.sessionId = event.sessionId
+            is StreamEvent.SessionStarted -> adoptSession(event.sessionId)
             is StreamEvent.TextDelta -> appendTextDelta(event.text)
             is StreamEvent.ThinkingDelta -> appendThinkingDelta(event.text)
             is StreamEvent.AssistantTurn -> applyAssistantTurn(event)
@@ -176,6 +204,19 @@ class ConversationController(
         listeners.clear()
     }
 
+    private fun adoptSession(sessionId: String) {
+        val requested = resumedSessionId
+        resumedSessionId = null
+        conversation.sessionId = sessionId
+        listeners.forEach { it.onSessionStarted() }
+        if (requested != null && requested != sessionId) {
+            appendNotice(
+                "Could not resume the previous Claude session, so this turn starts without earlier context.",
+                true,
+            )
+        }
+    }
+
     private fun restartOnNextPrompt() {
         session?.takeIf { it.isRunning() }?.stop()
     }
@@ -197,6 +238,7 @@ class ConversationController(
         val identifier = conversation.sessionId
         val start = if (identifier == null) SessionStart.Fresh(UUID.randomUUID().toString())
         else SessionStart.Resume(identifier)
+        resumedSessionId = identifier
         return try {
             created.start(conversation.options(), start)
             created
@@ -360,10 +402,36 @@ class ConversationController(
         if (busy == value) return
         busy = value
         listeners.forEach { it.onBusyChanged(value) }
+        if (!value) drainQueue()
+    }
+
+    private fun drainQueue() {
+        val next = queued.removeFirstOrNull() ?: return
+        notifyQueue()
+        dispatch(next)
+    }
+
+    private fun dispatch(prompt: QueuedPrompt) {
+        val target = ensureSession() ?: return
+        val first = conversation.transcript.none { it is TranscriptItem.UserPrompt }
+        appendItem(
+            TranscriptItem.UserPrompt(
+                nextId(),
+                prompt.text,
+                attachments = prompt.attachments.map { it.path },
+            )
+        )
+        if (first) adoptTitle(prompt.text)
+        changeBusy(true)
+        target.prompt(prompt.text, prompt.attachments)
+    }
+
+    private fun notifyQueue() {
+        val snapshot = queued.toList()
+        listeners.forEach { it.onQueueChanged(snapshot) }
     }
 
     private fun adoptTitle(text: String) {
-        if (conversation.transcript.any { it is TranscriptItem.UserPrompt }) return
         val line = text.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: return
         conversation.title = if (line.length > TITLE_LIMIT) {
             line.take(TITLE_LIMIT).trimEnd() + "\u2026"

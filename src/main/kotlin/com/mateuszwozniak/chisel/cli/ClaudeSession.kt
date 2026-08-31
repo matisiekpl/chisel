@@ -3,6 +3,7 @@ package com.mateuszwozniak.chisel.cli
 import com.google.gson.JsonObject
 import com.intellij.openapi.Disposable
 import com.mateuszwozniak.chisel.model.AgentMode
+import com.mateuszwozniak.chisel.model.PromptAttachment
 import com.mateuszwozniak.chisel.model.SessionOptions
 import com.mateuszwozniak.chisel.protocol.IncomingFrame
 import com.mateuszwozniak.chisel.protocol.StreamEvent
@@ -42,8 +43,8 @@ class ClaudeSession(
 
     fun isRunning(): Boolean = process?.isRunning() == true
 
-    fun prompt(text: String) {
-        handshake.whenComplete { _, _ -> process?.send(codec.userMessage(text)) }
+    fun prompt(text: String, attachments: List<PromptAttachment>) {
+        handshake.whenComplete { _, _ -> process?.send(codec.userMessage(text, attachments)) }
     }
 
     fun interrupt(): CompletableFuture<JsonObject?> = request("interrupt")

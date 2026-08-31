@@ -12,6 +12,7 @@ import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.mateuszwozniak.chisel.ui.BadgeShape
+import com.mateuszwozniak.chisel.ui.Shortcuts
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Dimension
@@ -31,14 +32,11 @@ class CommandApprovalDialog(
 
     enum class Outcome { ALLOW, DENY }
 
-    private val allowAction = object : DialogWrapperAction("Allow") {
-        override fun doAction(event: ActionEvent) {
-            outcome = Outcome.ALLOW
-            close(OK_EXIT_CODE)
-        }
+    private val allowAction = object : DialogWrapperAction(Shortcuts.labelled("Allow", Shortcuts.submitLabel())) {
+        override fun doAction(event: ActionEvent) = allow()
     }
 
-    private val denyAction = object : DialogWrapperAction("Deny") {
+    private val denyAction = object : DialogWrapperAction(Shortcuts.labelled("Deny", Shortcuts.ESCAPE_LABEL)) {
         override fun doAction(event: ActionEvent) = doCancelAction()
     }
 
@@ -48,10 +46,14 @@ class CommandApprovalDialog(
     init {
         title = "Allow $toolName?"
         allowAction.putValue(DEFAULT_ACTION, true)
-        allowAction.putValue(Action.SHORT_DESCRIPTION, "Enter")
-        denyAction.putValue(Action.SHORT_DESCRIPTION, "Escape")
         init()
+        Shortcuts.install(rootPane, Shortcuts.submit()) { allow() }
         colorButtons()
+    }
+
+    private fun allow() {
+        outcome = Outcome.ALLOW
+        close(OK_EXIT_CODE)
     }
 
     override fun doCancelAction() {

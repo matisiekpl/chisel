@@ -15,11 +15,18 @@ import com.mateuszwozniak.chisel.model.EffortLevel
 class ChiselSettings : SimplePersistentStateComponent<ChiselSettings.Model>(Model()) {
 
     class Model : BaseState() {
+        var defaultMode by enum(AgentMode.PLAN)
         var planModel by enum(AgentModel.OPUS)
         var planEffort by enum(EffortLevel.HIGH)
         var implementationModel by enum(AgentModel.SONNET)
         var implementationEffort by enum(EffortLevel.MEDIUM)
     }
+
+    var defaultMode: AgentMode
+        get() = state.defaultMode
+        set(value) {
+            state.defaultMode = value
+        }
 
     var planModel: AgentModel
         get() = state.planModel

@@ -28,7 +28,12 @@ class AccountDialog(
     private val profile: AccountProfile?,
 ) : DialogWrapper(project) {
 
-    private val usageHost = JPanel(BorderLayout())
+    private val usageHost = object : JPanel(BorderLayout()) {
+        override fun getPreferredSize(): Dimension {
+            val size = super.getPreferredSize()
+            return Dimension(size.width, maxOf(size.height, JBUI.scale(USAGE_HEIGHT)))
+        }
+    }
 
     private val refreshButton = InplaceButton(
         "Refresh",
@@ -76,7 +81,7 @@ class AccountDialog(
         usageHost.add(content, BorderLayout.CENTER)
         usageHost.revalidate()
         usageHost.repaint()
-        pack()
+        if (content.preferredSize.height > JBUI.scale(USAGE_HEIGHT)) pack()
     }
 
     private fun usageContent(snapshot: UsageSnapshot?): JComponent = panel {
@@ -124,6 +129,7 @@ class AccountDialog(
     private companion object {
         const val USAGE_TITLE = "Usage"
         const val METER_WIDTH = 200
+        const val USAGE_HEIGHT = 150
         const val BUTTON_SIZE = 24
         val STALE_AFTER: Duration = Duration.ofHours(1)
         val FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM, HH:mm")

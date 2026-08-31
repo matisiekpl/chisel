@@ -4,6 +4,7 @@ import com.google.gson.JsonObject
 import com.mateuszwozniak.chisel.model.TranscriptItem
 import com.mateuszwozniak.chisel.protocol.string
 import com.mateuszwozniak.chisel.util.ProjectPaths
+import java.nio.file.Paths
 
 class TranscriptHtml(private val renderer: MarkdownRenderer, private val basePath: String?) {
 
@@ -32,8 +33,18 @@ class TranscriptHtml(private val renderer: MarkdownRenderer, private val basePat
 
     fun relative(path: String): String = ProjectPaths.relative(basePath, path)
 
-    private fun userPrompt(item: TranscriptItem.UserPrompt): String =
-        "<div>${escape(item.text).replace("\n", "<br>")}</div>"
+    private fun userPrompt(item: TranscriptItem.UserPrompt): String {
+        val body = "<div>" + escape(item.text).replace("\n", "<br>") + "</div>"
+        if (item.attachments.isEmpty()) return body
+        val images = item.attachments.joinToString("") { path ->
+            val uri = Paths.get(path).toUri().toString()
+            val name = escape(Paths.get(path).fileName.toString())
+            "<a href=\"" + uri + "\" style=\"text-decoration:none\">" +
+                "<img src=\"" + uri + "\" alt=\"" + name + "\" border=\"0\" width=\"" +
+                THUMBNAIL_WIDTH + "\"></a>"
+        }
+        return body + "<div>" + images + "</div>"
+    }
 
     private fun toolDetail(item: TranscriptItem.ToolCall): String {
         val arguments = pretty(item.input)
@@ -81,5 +92,6 @@ class TranscriptHtml(private val renderer: MarkdownRenderer, private val basePat
         const val CONTENT_LIMIT = 4000
         const val SUMMARY_LIMIT = 80
         const val WRAP_LIMIT = 100
+        const val THUMBNAIL_WIDTH = 240
     }
 }

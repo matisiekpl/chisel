@@ -1,5 +1,6 @@
 package com.mateuszwozniak.chisel.ui
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.wm.ToolWindow
@@ -46,6 +47,7 @@ object ConversationTabs {
             .firstOrNull { it.getUserData(CONTROLLER) === controller }
         if (existing != null) {
             toolWindow.contentManager.setSelectedContent(existing)
+            focusInput(existing)
             return existing
         }
         val panel = ConversationPanel(project, controller)
@@ -54,9 +56,15 @@ object ConversationTabs {
         content.isCloseable = true
         content.setDisposer(panel)
         content.putUserData(CONTROLLER, controller)
-        content.preferredFocusableComponent = panel
+        content.preferredFocusableComponent = panel.focusTarget
         toolWindow.contentManager.addContent(content)
         toolWindow.contentManager.setSelectedContent(content)
+        focusInput(content)
         return content
+    }
+
+    fun focusInput(content: Content) {
+        val panel = content.component as? ConversationPanel ?: return
+        ApplicationManager.getApplication().invokeLater { panel.focusInput() }
     }
 }
