@@ -1,4 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 13 13">
-    <path d="M9.34 1.54L11.46 3.66L9.26 5.86L8.84 5.44L3.24 11.04L1.96 9.76L7.56 4.16L7.14 3.74Z"
-          fill="none" stroke="#6C707E" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    <defs>
+        <linearGradient id="steel" x1="0" y1="0" x2="1" y2="0.4">
+            <stop offset="0" stop-color="#E3E7EE"/>
+            <stop offset="1" stop-color="#8F98A9"/>
+        </linearGradient>
+        <linearGradient id="grip" x1="0" y1="0" x2="1" y2="0.6">
+            <stop offset="0" stop-color="#F0B455"/>
+            <stop offset="1" stop-color="#D98B26"/>
+        </linearGradient>
+    </defs>
+    <g transform="translate(2 2) rotate(-35 20 20) translate(20 20) scale(1.2) translate(-20 -20)">
+        <rect x="13.5" y="3.5" width="13" height="14" rx="4" fill="url(#grip)"/>
+        <rect x="12" y="15.8" width="16" height="3.8" rx="1.6" fill="#A96A22"/>
+        <path d="M14.6 19.4 h10.8 l-1 11.4 h-8.8 z" fill="url(#steel)"/>
+        <path d="M15.6 30.8 h8.8 l-1.1 5.4 h-6.6 z" fill="#616B7E"/>
+    </g>
 </svg>
