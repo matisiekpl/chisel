@@ -55,6 +55,9 @@ class ConversationController(
     private var resumedSessionId: String? = null
 
     @Volatile
+    private var interrupted: Boolean = false
+
+    @Volatile
     var busy: Boolean = false
         private set
 
@@ -124,7 +127,19 @@ class ConversationController(
             queued.clear()
             notifyQueue()
         }
-        session?.takeIf { it.isRunning() }?.interrupt()
+        val target = session?.takeIf { it.isRunning() }
+        if (target == null) {
+            changeBusy(false)
+            return
+        }
+        if (interrupted) {
+            target.stop()
+            appendNotice("Stopped the Claude Code process. The next message starts it again.", false)
+            changeBusy(false)
+            return
+        }
+        interrupted = true
+        target.interrupt().whenComplete { _, _ -> changeBusy(false) }
     }
 
     fun rewind(messageUuid: String, onFinished: (String?) -> Unit) {
@@ -496,6 +511,7 @@ class ConversationController(
     private fun changeBusy(value: Boolean) {
         if (busy == value) return
         busy = value
+        if (value) interrupted = false
         listeners.forEach { it.onBusyChanged(value) }
         if (value) return
         runCatching {

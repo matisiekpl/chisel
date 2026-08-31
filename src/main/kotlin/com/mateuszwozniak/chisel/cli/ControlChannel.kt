@@ -4,6 +4,7 @@ import com.google.gson.JsonObject
 import com.mateuszwozniak.chisel.protocol.IncomingFrame
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 
@@ -23,12 +24,10 @@ class ControlChannel(
         }
         val answer = CompletableFuture<JsonObject?>()
         pending[requestId] = answer
+        answer.whenComplete { _, _ -> pending.remove(requestId) }
         runCatching { transport(codec.controlRequest(requestId, body)) }
-            .onFailure {
-                pending.remove(requestId)
-                answer.completeExceptionally(it)
-            }
-        return answer
+            .onFailure { answer.completeExceptionally(it) }
+        return answer.orTimeout(ANSWER_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     }
 
     fun complete(frame: IncomingFrame.ControlAnswer) {
@@ -41,5 +40,9 @@ class ControlChannel(
         pending.keys.toList().forEach { requestId ->
             pending.remove(requestId)?.completeExceptionally(IllegalStateException(reason))
         }
+    }
+
+    private companion object {
+        const val ANSWER_TIMEOUT_SECONDS = 30L
     }
 }
