@@ -9,12 +9,10 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.AsyncProcessIcon
@@ -48,6 +46,7 @@ class TranscriptPanel(
     private val queue = MergingUpdateQueue("ChiselTranscript", MERGE_MILLIS, true, list, this)
     private val busyIcon = AsyncProcessIcon("ChiselBusy")
     private val busyBar = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), JBUI.scale(4)))
+    private val busyLabel = JBLabel(WORKING_TEXT).apply { foreground = UIUtil.getContextHelpForeground() }
 
     private var contentDisposable = Disposer.newDisposable("ChiselTranscriptContent")
     private var following = true
@@ -58,7 +57,7 @@ class TranscriptPanel(
         busyBar.isOpaque = false
         busyBar.border = JBUI.Borders.empty(8, 12, 10, 12)
         busyBar.add(busyIcon)
-        busyBar.add(JBLabel("Working…").apply { foreground = UIUtil.getContextHelpForeground() })
+        busyBar.add(busyLabel)
         busyBar.isVisible = false
 
         add(scroll, BorderLayout.CENTER)
@@ -98,6 +97,13 @@ class TranscriptPanel(
         queue.queue(object : Update("reset") {
             override fun run() = mutate { rebuild() }
         })
+    }
+
+    override fun onCompactingChanged(running: Boolean) {
+        ApplicationManager.getApplication().invokeLater(
+            { busyLabel.text = if (running) COMPACTING_TEXT else WORKING_TEXT },
+            ModalityState.defaultModalityState(),
+        )
     }
 
     override fun onBusyChanged(busy: Boolean) {
@@ -182,8 +188,7 @@ class TranscriptPanel(
 
     private fun openAttachment(link: String) {
         val path = runCatching { Paths.get(URI(link)) }.getOrNull() ?: return
-        val file = LocalFileSystem.getInstance().refreshAndFindFileByPath(path.toString()) ?: return
-        FileEditorManager.getInstance(project).openFile(file, true)
+        FileOpener.open(project, path.toString())
     }
 
     private fun showDetail(item: TranscriptItem.ToolCall) {
@@ -210,6 +215,8 @@ class TranscriptPanel(
 
     private companion object {
         const val PLACE = "ChiselTranscript"
+        const val WORKING_TEXT = "Working…"
+        const val COMPACTING_TEXT = "Compacting the conversation…"
         const val LIST_GAP = 6
         const val LIST_PADDING = 8
         const val MERGE_MILLIS = 50

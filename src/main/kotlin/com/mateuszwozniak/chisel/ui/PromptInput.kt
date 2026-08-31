@@ -19,6 +19,7 @@ import com.intellij.ui.JBColor
 import com.intellij.util.textCompletion.TextFieldWithCompletion
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import com.mateuszwozniak.chisel.model.ContextUsage
 import com.mateuszwozniak.chisel.model.PromptAttachment
 import com.mateuszwozniak.chisel.model.QueuedPrompt
 import java.awt.BasicStroke
@@ -98,6 +99,8 @@ class PromptInput(
         AllIcons.Actions.Attach,
         ActionListener { chooseFiles() },
     )
+
+    private val contextMeter = ContextMeter()
 
     private val attachments = AttachmentBar(project)
 
@@ -198,6 +201,12 @@ class PromptInput(
         promptField.requestFocusInWindow()
     }
 
+    fun showContext(usage: ContextUsage?) {
+        contextMeter.show(usage)
+        revalidate()
+        repaint()
+    }
+
     fun showQueue(queued: List<QueuedPrompt>) {
         queue.show(queued)
         revalidate()
@@ -224,6 +233,7 @@ class PromptInput(
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(6), 0))
         right.isOpaque = false
         right.border = JBUI.Borders.emptyRight(TEXT_INSET)
+        right.add(contextMeter)
         right.add(attachButton)
         right.add(stopButton)
         right.add(sendButton)

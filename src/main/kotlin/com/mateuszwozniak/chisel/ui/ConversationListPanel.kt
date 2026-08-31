@@ -62,7 +62,7 @@ class ConversationListPanel(private val project: Project) :
     }
 
     private val deleteAction = object :
-        AnAction("Delete", "Delete this conversation", AllIcons.General.Remove), DumbAware {
+        AnAction("Delete", "Delete this conversation", AllIcons.Actions.GC), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 

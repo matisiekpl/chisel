@@ -37,6 +37,21 @@ object ClaudeSessions {
         return SessionTranscript(directory.resolve(sessionId + SUFFIX)).read()
     }
 
+    fun titleOf(projectPath: String?, sessionId: String): String? {
+        val directory = directoryFor(projectPath) ?: return null
+        val file = directory.resolve(sessionId + SUFFIX)
+        if (!Files.isReadable(file)) return null
+        return runCatching {
+            Files.lines(file).use { lines ->
+                lines.map { line ->
+                    (runCatching { JsonParser.parseString(line) as? JsonObject }.getOrNull())
+                        ?.takeIf { it.string("type") == "ai-title" }
+                        ?.string("aiTitle")
+                }.filter { it != null }.reduce { _, last -> last }.orElse(null)
+            }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+    }
+
     fun delete(projectPath: String?, sessionId: String) {
         val directory = directoryFor(projectPath) ?: return
         runCatching { Files.deleteIfExists(directory.resolve(sessionId + SUFFIX)) }

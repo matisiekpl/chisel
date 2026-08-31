@@ -1,10 +1,8 @@
 package com.mateuszwozniak.chisel.ui
 
 import com.intellij.icons.AllIcons
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.util.ui.JBUI
 import com.mateuszwozniak.chisel.model.PromptAttachment
 import java.awt.FlowLayout
@@ -66,8 +64,7 @@ class AttachmentBar(private val project: Project) :
     }
 
     private fun open(attachment: PromptAttachment) {
-        val file = LocalFileSystem.getInstance().refreshAndFindFileByPath(attachment.path) ?: return
-        FileEditorManager.getInstance(project).openFile(file, true)
+        FileOpener.open(project, attachment.path)
     }
 
     private fun label(attachment: PromptAttachment): String {

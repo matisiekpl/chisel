@@ -21,6 +21,18 @@ class Conversation(
 
     val tasks: MutableList<AgentTask> = CopyOnWriteArrayList()
 
+    var titleLocked: Boolean = false
+
+    var updatedAt: Long = System.currentTimeMillis()
+
+    var context: ContextUsage? = null
+
+    var costUsd: Double = 0.0
+
+    var inputTokens: Long = 0
+
+    var outputTokens: Long = 0
+
     fun turn(): Int = transcript.count { it is TranscriptItem.UserPrompt }
 
     fun truncateAt(messageUuid: String) {

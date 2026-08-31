@@ -9,12 +9,17 @@ import com.mateuszwozniak.chisel.protocol.ContentBlock
 import com.mateuszwozniak.chisel.protocol.IncomingFrame
 import com.mateuszwozniak.chisel.protocol.PermissionRequest
 import com.mateuszwozniak.chisel.protocol.StreamEvent
+import com.mateuszwozniak.chisel.protocol.array
 import com.mateuszwozniak.chisel.protocol.bool
 import com.mateuszwozniak.chisel.protocol.number
 import com.mateuszwozniak.chisel.protocol.obj
 import com.mateuszwozniak.chisel.protocol.string
 
 class StreamJsonCodec {
+
+    private companion object {
+        const val COMPACTING = "compacting"
+    }
 
     private val gson = Gson()
 
@@ -125,13 +130,13 @@ class StreamJsonCodec {
         "system" -> parseSystem(root)
         "stream_event" -> parseDelta(root)
         "assistant" -> StreamEvent.AssistantTurn(
-            ContentBlock.parseList(root.obj("message")?.getAsJsonArray("content")),
+            ContentBlock.parseContent(root.obj("message")?.get("content")),
             root.string("parent_tool_use_id"),
         )
 
         "user" -> StreamEvent.UserTurn(
             root.string("uuid"),
-            ContentBlock.parseList(root.obj("message")?.getAsJsonArray("content")),
+            ContentBlock.parseContent(root.obj("message")?.get("content")),
             root.string("parent_tool_use_id"),
         )
 
@@ -145,8 +150,8 @@ class StreamJsonCodec {
             "init" -> StreamEvent.SessionStarted(
                 root.string("session_id").orEmpty(),
                 root.string("model"),
-                root.getAsJsonArray("capabilities")?.mapNotNull { it.asString }.orEmpty(),
-                root.getAsJsonArray("slash_commands")?.mapNotNull { it.asString }.orEmpty(),
+                root.array("capabilities")?.mapNotNull { it.asString }.orEmpty(),
+                root.array("slash_commands")?.mapNotNull { it.asString }.orEmpty(),
             )
 
             "task_started" -> taskId?.let {
@@ -167,6 +172,12 @@ class StreamJsonCodec {
                 StreamEvent.TaskProgress(it, root.string("status"), root.string("output_file"))
             }
 
+            "status" -> parseStatus(root)
+
+            "compact_boundary" -> StreamEvent.Compacted(
+                root.obj("compact_metadata")?.string("trigger"),
+            )
+
             "api_retry" -> StreamEvent.ApiRetry(
                 root.number("attempt")?.toInt() ?: 0,
                 root.number("max_retries")?.toInt() ?: 0,
@@ -175,6 +186,14 @@ class StreamJsonCodec {
 
             else -> null
         }
+    }
+
+    private fun parseStatus(root: JsonObject): StreamEvent? {
+        val status = root.string("status")
+        val result = root.string("compact_result")
+        if (status == COMPACTING) return StreamEvent.Compacting(true, null)
+        if (result == null) return null
+        return StreamEvent.Compacting(false, root.string("compact_error").takeIf { result != "success" })
     }
 
     private fun parseDelta(root: JsonObject): StreamEvent? {

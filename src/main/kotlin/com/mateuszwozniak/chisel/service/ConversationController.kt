@@ -2,11 +2,13 @@ package com.mateuszwozniak.chisel.service
 
 import com.google.gson.JsonObject
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.mateuszwozniak.chisel.cli.ClaudeCommandBuilder
 import com.mateuszwozniak.chisel.cli.ClaudeExecutable
 import com.mateuszwozniak.chisel.cli.ClaudeSession
+import com.mateuszwozniak.chisel.cli.ClaudeSessions
 import com.mateuszwozniak.chisel.cli.SessionListener
 import com.mateuszwozniak.chisel.cli.SessionStart
 import com.mateuszwozniak.chisel.model.AgentMode
@@ -15,6 +17,7 @@ import com.mateuszwozniak.chisel.model.AgentTask
 import com.mateuszwozniak.chisel.model.EffortLevel
 import com.mateuszwozniak.chisel.model.PromptAttachment
 import com.mateuszwozniak.chisel.model.QueuedPrompt
+import com.mateuszwozniak.chisel.model.ContextUsage
 import com.mateuszwozniak.chisel.model.Conversation
 import com.mateuszwozniak.chisel.model.TodoItem
 import com.mateuszwozniak.chisel.model.TodoStatus
@@ -24,6 +27,9 @@ import com.mateuszwozniak.chisel.protocol.PermissionDecision
 import com.mateuszwozniak.chisel.protocol.PermissionRequest
 import com.mateuszwozniak.chisel.protocol.StreamEvent
 import com.mateuszwozniak.chisel.protocol.WriteToolInput
+import com.mateuszwozniak.chisel.protocol.array
+import com.mateuszwozniak.chisel.protocol.number
+import com.mateuszwozniak.chisel.protocol.obj
 import com.mateuszwozniak.chisel.protocol.string
 import com.mateuszwozniak.chisel.state.ChiselSettings
 import com.mateuszwozniak.chisel.util.VfsRefresh
@@ -49,6 +55,10 @@ class ConversationController(
 
     @Volatile
     var busy: Boolean = false
+        private set
+
+    @Volatile
+    var compacting: Boolean = false
         private set
 
     fun addListener(listener: ConversationListener) {
@@ -162,6 +172,14 @@ class ConversationController(
     override fun onEvent(event: StreamEvent) {
         when (event) {
             is StreamEvent.SessionStarted -> adoptSession(event)
+            is StreamEvent.Compacting -> applyCompacting(event)
+
+            is StreamEvent.Compacted -> appendNotice(
+                "Conversation compacted" + (event.trigger?.let { " ($it)" } ?: "") +
+                    ". Earlier turns were summarised to free context.",
+                false,
+            )
+
             is StreamEvent.TaskStarted -> startTask(event)
             is StreamEvent.TaskProgress -> updateTask(event)
             is StreamEvent.TextDelta -> appendTextDelta(event.text)
@@ -355,21 +373,24 @@ class ConversationController(
     }
 
     private fun applyTurnFinished(event: StreamEvent.TurnFinished) {
-        dropStreamingItems()
-        event.errorText?.let { appendNotice(it, true) }
-        appendItem(
-            TranscriptItem.TurnSummary(
-                nextId(),
-                event.costUsd,
-                event.inputTokens,
-                event.outputTokens,
+        runCatching {
+            accumulateUsage(event)
+            dropStreamingItems()
+            event.errorText?.let { appendNotice(it, true) }
+            appendItem(
+                TranscriptItem.TurnSummary(
+                    nextId(),
+                    event.costUsd,
+                    event.inputTokens,
+                    event.outputTokens,
+                )
             )
-        )
+        }.onFailure { thisLogger().warn("Could not settle the finished turn", it) }
         changeBusy(false)
     }
 
     private fun applyTodos(input: JsonObject) {
-        val entries = input.getAsJsonArray("todos") ?: return
+        val entries = input.array("todos") ?: return
         synchronized(this) {
             conversation.todos.clear()
             entries.mapNotNull { it as? JsonObject }.forEach { entry ->
@@ -434,7 +455,62 @@ class ConversationController(
         if (busy == value) return
         busy = value
         listeners.forEach { it.onBusyChanged(value) }
-        if (!value) drainQueue()
+        if (value) return
+        runCatching {
+            refreshContext()
+            adoptGeneratedTitle()
+        }.onFailure { thisLogger().warn("Could not refresh conversation state", it) }
+        drainQueue()
+    }
+
+    private fun applyCompacting(event: StreamEvent.Compacting) {
+        compacting = event.running
+        listeners.forEach { it.onCompactingChanged(event.running) }
+        if (event.running) return
+        event.error?.let { appendNotice("Compaction failed: $it", true) }
+        refreshContext()
+    }
+
+    private fun accumulateUsage(event: StreamEvent.TurnFinished) {
+        event.costUsd?.let { conversation.costUsd = it }
+        event.inputTokens?.let { conversation.inputTokens += it }
+        event.outputTokens?.let { conversation.outputTokens += it }
+        listeners.forEach { it.onUsageChanged() }
+    }
+
+    private fun refreshContext() {
+        val target = session?.takeIf { it.isRunning() } ?: return
+        target.contextUsage().whenComplete { payload, _ ->
+            val usage = payload?.let(::parseContext) ?: return@whenComplete
+            conversation.context = usage
+            listeners.forEach { it.onContextChanged() }
+        }
+    }
+
+    private fun parseContext(payload: JsonObject): ContextUsage? {
+        val max = payload.number("maxTokens")?.toLong() ?: return null
+        val categories = payload.get("categories")?.takeIf { it.isJsonArray }?.asJsonArray
+            ?.mapNotNull { it as? JsonObject }
+            ?.mapNotNull { category ->
+                val name = category.string("name") ?: return@mapNotNull null
+                ContextUsage.Category(name, category.number("tokens")?.toLong() ?: 0)
+            }
+            .orEmpty()
+        return ContextUsage(
+            payload.number("percentage")?.toInt() ?: 0,
+            payload.number("totalTokens")?.toLong() ?: 0,
+            max,
+            categories,
+        )
+    }
+
+    private fun adoptGeneratedTitle() {
+        if (conversation.titleLocked) return
+        val sessionId = conversation.sessionId ?: return
+        val title = ClaudeSessions.titleOf(project.basePath, sessionId) ?: return
+        if (title == conversation.title) return
+        conversation.title = title
+        listeners.forEach { it.onTitleChanged(title) }
     }
 
     private fun drainQueue() {
@@ -445,6 +521,7 @@ class ConversationController(
 
     private fun dispatch(prompt: QueuedPrompt) {
         val target = ensureSession() ?: return
+        conversation.updatedAt = System.currentTimeMillis()
         val first = conversation.transcript.none { it is TranscriptItem.UserPrompt }
         appendItem(
             TranscriptItem.UserPrompt(

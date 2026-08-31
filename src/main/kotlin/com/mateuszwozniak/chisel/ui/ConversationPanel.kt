@@ -6,7 +6,6 @@ import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.util.Disposer
-import com.intellij.ui.AnimatedIcon
 import com.intellij.util.ui.JBUI
 import com.mateuszwozniak.chisel.model.QueuedPrompt
 import com.mateuszwozniak.chisel.model.TodoItem
@@ -15,7 +14,6 @@ import com.mateuszwozniak.chisel.service.ConversationListener
 import com.mateuszwozniak.chisel.ui.approval.RewindConfirmationDialog
 import com.mateuszwozniak.chisel.util.ProjectPaths
 import java.awt.BorderLayout
-import java.awt.FlowLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
 
@@ -31,9 +29,7 @@ class ConversationPanel(
     private val transcript = TranscriptPanel(project, controller) { messageUuid, restorePrompt ->
         requestRewind(messageUuid, restorePrompt)
     }
-    private val agentsLink =
-        BadgeButton("View running subagents", AnimatedIcon.Default.INSTANCE) { openAgents() }
-    private val agentsBar = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0))
+    private val toolbar = ConversationToolbar(project, controller) { openAgents() }
     private val todoPanel = TodoPanel()
     private val options = OptionsBar(controller)
     private val input = PromptInput(
@@ -48,13 +44,8 @@ class ConversationPanel(
         input.onQueuePop = { controller.popLastQueued() }
         input.onHistory = { index -> controller.promptAt(index) }
         input.commands = { controller.conversation.slashCommands.toList() }
-        agentsBar.isOpaque = false
-        agentsBar.border = JBUI.Borders.empty(8, 12, 8, 12)
-        agentsBar.isVisible = false
-        agentsBar.add(agentsLink)
-
         val header = JPanel(BorderLayout())
-        header.add(agentsBar, BorderLayout.NORTH)
+        header.add(toolbar.component(), BorderLayout.NORTH)
         header.add(todoPanel, BorderLayout.CENTER)
 
         val center = JPanel(BorderLayout())
@@ -67,7 +58,9 @@ class ConversationPanel(
         Disposer.register(this, transcript)
         controller.addListener(this)
         todoPanel.update(controller.conversation.todos.toList())
+        toolbar.showUsage()
         input.showQueue(controller.queued())
+        input.showContext(controller.conversation.context)
     }
 
     override fun onTodosChanged(todos: List<TodoItem>) = onEventDispatchThread {
@@ -84,6 +77,12 @@ class ConversationPanel(
 
     override fun onTasksChanged() = onEventDispatchThread { syncAgents() }
 
+    override fun onUsageChanged() = onEventDispatchThread { toolbar.showUsage() }
+
+    override fun onContextChanged() = onEventDispatchThread {
+        input.showContext(controller.conversation.context)
+    }
+
     override fun onBusyChanged(busy: Boolean) = onEventDispatchThread {
         input.showBusy(busy)
     }
@@ -98,22 +97,21 @@ class ConversationPanel(
         val running = controller.conversation.tasks.any { !it.finished }
         if (!running) {
             dismissedAgents = false
-            agentsBar.isVisible = false
             return
         }
         if (agentsDialog == null && !dismissedAgents) openAgents()
-        agentsBar.isVisible = agentsDialog == null
     }
 
     private fun openAgents() {
-        if (agentsDialog != null) return
+        agentsDialog?.let {
+            it.toFront()
+            return
+        }
         val dialog = AgentsDialog(project, controller, html)
         agentsDialog = dialog
-        agentsBar.isVisible = false
         Disposer.register(dialog.disposable, Disposable {
             agentsDialog = null
             dismissedAgents = true
-            syncAgents()
         })
         dialog.show()
     }

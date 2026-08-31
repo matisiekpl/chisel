@@ -23,6 +23,10 @@ sealed interface StreamEvent {
         val outputFile: String?,
     ) : StreamEvent
 
+    data class Compacted(val trigger: String?) : StreamEvent
+
+    data class Compacting(val running: Boolean, val error: String?) : StreamEvent
+
     data class TextDelta(val text: String) : StreamEvent
 
     data class ThinkingDelta(val text: String) : StreamEvent

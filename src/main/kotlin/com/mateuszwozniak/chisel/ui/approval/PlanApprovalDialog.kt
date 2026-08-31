@@ -27,7 +27,7 @@ class PlanApprovalDialog(
 
     enum class Outcome { IMPLEMENT, KEEP_PLANNING }
 
-    private val feedback = FeedbackArea("Feedback on the plan, sent back to the agent", FEEDBACK_ROWS)
+    private val feedback = FeedbackArea("Feedback on the plan", FEEDBACK_ROWS)
 
     private val submitAction =
         object : DialogWrapperAction(Shortcuts.labelled(IMPLEMENT_LABEL, Shortcuts.submitLabel())) {

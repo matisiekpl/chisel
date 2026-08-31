@@ -1,5 +1,6 @@
 package com.mateuszwozniak.chisel.protocol
 
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 
 internal fun JsonObject.string(name: String): String? =
@@ -13,3 +14,6 @@ internal fun JsonObject.number(name: String): Double? =
 
 internal fun JsonObject.obj(name: String): JsonObject? =
     get(name)?.takeIf { it.isJsonObject }?.asJsonObject
+
+internal fun JsonObject.array(name: String): JsonArray? =
+    get(name)?.takeIf { it.isJsonArray }?.asJsonArray

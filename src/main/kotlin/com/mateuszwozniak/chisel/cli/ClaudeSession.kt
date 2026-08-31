@@ -2,6 +2,7 @@ package com.mateuszwozniak.chisel.cli
 
 import com.google.gson.JsonObject
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.diagnostic.thisLogger
 import com.mateuszwozniak.chisel.model.AgentMode
 import com.mateuszwozniak.chisel.model.PromptAttachment
 import com.mateuszwozniak.chisel.model.SessionOptions
@@ -52,6 +53,8 @@ class ClaudeSession(
     fun changeMode(mode: AgentMode): CompletableFuture<JsonObject?> =
         request("set_permission_mode") { addProperty("mode", mode.permissionMode) }
 
+    fun contextUsage(): CompletableFuture<JsonObject?> = request("get_context_usage")
+
     fun rewindFiles(messageUuid: String): CompletableFuture<JsonObject?> =
         request("rewind_files") { addProperty("user_message_id", messageUuid) }
 
@@ -76,6 +79,11 @@ class ClaudeSession(
     }
 
     private fun handleLine(line: String) {
+        runCatching { dispatch(line) }
+            .onFailure { thisLogger().warn("Could not handle a stream frame: $line", it) }
+    }
+
+    private fun dispatch(line: String) {
         when (val frame = codec.parseLine(line)) {
             is IncomingFrame.Event -> {
                 (frame.event as? StreamEvent.SessionStarted)?.let { sessionId = it.sessionId }

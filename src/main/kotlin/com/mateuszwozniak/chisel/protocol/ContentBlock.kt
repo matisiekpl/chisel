@@ -1,6 +1,7 @@
 package com.mateuszwozniak.chisel.protocol
 
 import com.google.gson.JsonArray
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 
 sealed interface ContentBlock {
@@ -14,6 +15,12 @@ sealed interface ContentBlock {
     data class ToolResult(val toolUseId: String, val text: String, val isError: Boolean) : ContentBlock
 
     companion object {
+
+        fun parseContent(content: JsonElement?): List<ContentBlock> {
+            if (content == null) return emptyList()
+            if (content.isJsonPrimitive) return listOf(Text(content.asString))
+            return parseList(content.takeIf { it.isJsonArray }?.asJsonArray)
+        }
 
         fun parseList(content: JsonArray?): List<ContentBlock> =
             content.orEmpty().mapNotNull { parse(it as? JsonObject ?: return@mapNotNull null) }

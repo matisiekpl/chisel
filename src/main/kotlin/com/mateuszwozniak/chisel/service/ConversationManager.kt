@@ -29,8 +29,9 @@ class ConversationManager(private val project: Project) : Disposable {
 
     fun conversations(): List<ConversationController> = controllers.values.toList()
 
-    fun started(): List<ConversationController> =
-        controllers.values.filter { it.conversation.transcript.isNotEmpty() }
+    fun started(): List<ConversationController> = controllers.values
+        .filter { it.conversation.transcript.isNotEmpty() }
+        .sortedByDescending { it.conversation.updatedAt }
 
     fun restore(): List<ConversationController> {
         if (restored) return conversations()
@@ -49,6 +50,7 @@ class ConversationManager(private val project: Project) : Disposable {
                 entry.sessionId,
             )
             conversation.transcript.addAll(store.load(id))
+            entry.updatedAt.takeIf { it > 0 }?.let { conversation.updatedAt = it }
             register(conversation)
         }
         importTerminalSessions()
@@ -77,6 +79,7 @@ class ConversationManager(private val project: Project) : Disposable {
                     session.id,
                 )
                 conversation.transcript.addAll(transcript)
+                conversation.updatedAt = session.modifiedAt.toEpochMilli()
                 register(conversation)
             }
     }
@@ -108,6 +111,7 @@ class ConversationManager(private val project: Project) : Disposable {
 
     fun rename(controller: ConversationController, title: String) {
         controller.conversation.title = title
+        controller.conversation.titleLocked = true
         persist()
         notifyChanged()
     }
@@ -140,6 +144,7 @@ class ConversationManager(private val project: Project) : Disposable {
                 mode = controller.conversation.mode.name
                 model = controller.conversation.model.name
                 effort = controller.conversation.effort.name
+                updatedAt = controller.conversation.updatedAt
             }
         }.toMutableList()
         SaveAndSyncHandler.getInstance().scheduleProjectSave(project)
@@ -162,7 +167,10 @@ class ConversationManager(private val project: Project) : Disposable {
         Disposer.register(this, controller)
         controller.addListener(object : ConversationListener {
             override fun onBusyChanged(busy: Boolean) {
-                if (!busy) store.save(conversation)
+                if (busy) return
+                store.save(conversation)
+                persist()
+                notifyChanged()
             }
 
             override fun onTitleChanged(title: String) {
