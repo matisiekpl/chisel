@@ -23,21 +23,27 @@ intellijPlatform {
         name = "Chisel"
         version = project.version.toString()
         description = """
-            Chisel runs the Claude Code CLI installed on your machine and gives it a panel inside the IDE.
+            Chisel is an AI coding agent for people who care about the quality of what lands in the
+            repository. Every change it proposes goes through a review you control: the whole file in a
+            diff, a comment on any line, and the freedom to rewrite the agent's code by hand before a
+            single byte touches disk. Your corrections go back to the agent and shape the rest of the work.
+
+            <p>Chisel runs on your existing Claude Code subscription, driving the Claude Code CLI already
+            signed in on your machine. No separate account, no API key, no extra billing.</p>
 
             <ul>
-              <li>Conversations in tool window tabs, with the transcript, queued messages and image or file attachments.</li>
-              <li>Ask, Plan, Implementation and Auto modes, with the model and effort level chosen per conversation.</li>
-              <li>Every file write arrives as a diff you accept, comment on line by line, or edit by hand.</li>
-              <li>Shell commands and agent questions are answered in dedicated dialogs.</li>
-              <li>Subagents and workflows are tracked live, with their output available per agent.</li>
-              <li>Context occupancy, token counts and session cost are shown next to the prompt.</li>
-              <li>In IDEs with the Database plugin, the DDL of a data source schema attaches to a prompt.</li>
-              <li>Sessions started in the terminal are picked up, and a conversation can be driven from a phone.</li>
+              <li>Every write opens in the IDE diff: accept it, comment line by line like a pull request, or rewrite the proposal by hand.</li>
+              <li>A correction carries forward, so a name or a convention you fixed once stays fixed in the files that follow.</li>
+              <li>Plans, shell commands and agent questions arrive as dialogs you answer, not as things that already happened.</li>
+              <li>Ask, Plan, Implementation and Auto modes decide how much the agent may do on its own; the model and effort level are picked per conversation.</li>
+              <li>A message can be rewound together with the files it changed.</li>
+              <li>Conversations started in the terminal continue in the IDE, and any conversation can be handed to a phone.</li>
+              <li>Files, images and, in IDEs with the Database plugin, the DDL of a data source schema attach to a prompt.</li>
+              <li>Context usage, token counts and the cost of the conversation sit next to the input.</li>
             </ul>
 
-            Chisel is not affiliated with Anthropic. It requires Claude Code to be installed and signed in
-            on this machine, and it uses your own Claude subscription through that CLI.
+            Chisel is not affiliated with Anthropic. It requires the Claude Code CLI installed and signed
+            in on this machine.
         """.trimIndent()
 
         changeNotes = """
