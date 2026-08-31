@@ -43,6 +43,7 @@ class ConversationListPanel(private val project: Project) :
     SimpleToolWindowPanel(true, true), ConversationsListener, Disposable {
 
     private val manager = ConversationManager.getInstance(project)
+    private val view = ConversationView.getInstance(project)
     private val root = DefaultMutableTreeNode()
     private val group = DefaultMutableTreeNode(GROUP_LABEL)
     private val treeModel = DefaultTreeModel(root)
@@ -86,7 +87,7 @@ class ConversationListPanel(private val project: Project) :
             override fun mouseClicked(event: MouseEvent) {
                 if (!SwingUtilities.isLeftMouseButton(event)) return
                 if (event.isShiftDown || event.isControlDown || event.isMetaDown) return
-                selected().singleOrNull()?.let { ConversationTabs.open(project, it) }
+                selected().singleOrNull()?.let { view.open(it) }
             }
         })
         tree.addMouseListener(object : PopupHandler() {
@@ -152,7 +153,7 @@ class ConversationListPanel(private val project: Project) :
         )?.trim()
         if (title.isNullOrEmpty()) return
         manager.rename(controller, title)
-        ConversationTabs.retitle(project, controller)
+        view.retitle(controller)
     }
 
     private fun delete() {
@@ -184,7 +185,7 @@ class ConversationListPanel(private val project: Project) :
         }
         if (!confirmed) return
         controllers.forEach { controller ->
-            ConversationTabs.close(project, controller)
+            view.close(controller)
             if (removeSessions) {
                 controller.conversation.sessionId?.let { ClaudeSessions.delete(project.basePath, it) }
             }

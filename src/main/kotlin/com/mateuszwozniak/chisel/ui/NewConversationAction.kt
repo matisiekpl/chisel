@@ -12,6 +12,6 @@ class NewConversationAction(
 ) : AnAction("New Conversation", "Start a new conversation", AllIcons.General.Add), DumbAware {
 
     override fun actionPerformed(event: AnActionEvent) {
-        ConversationTabs.open(project, ConversationManager.getInstance(project).createOrReuse())
+        ConversationView.getInstance(project).open(ConversationManager.getInstance(project).createOrReuse())
     }
 }

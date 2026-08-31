@@ -5,7 +5,6 @@ import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
-import com.intellij.openapi.wm.ex.ToolWindowEx
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.content.ContentManagerEvent
 import com.intellij.ui.content.ContentManagerListener
@@ -21,34 +20,33 @@ class ChiselToolWindowFactory : ToolWindowFactory, DumbAware {
             return
         }
         val manager = ConversationManager.getInstance(project)
+        val view = ConversationView.getInstance(project)
         val conversations = manager.restore()
         val state = ConversationState.getInstance(project).state
         val initial = conversations.firstOrNull { it.conversation.id == state.selectedId }
             ?: conversations.first()
-        ConversationTabs.add(project, toolWindow, initial)
+        view.show(toolWindow, initial)
         manager.persist()
 
-        if (toolWindow is ToolWindowEx) {
-            toolWindow.setTabActions(NewConversationAction(project))
-        }
+        toolWindow.setTitleActions(listOf(NewConversationAction(project)))
 
         toolWindow.contentManager.addContentManagerListener(object : ContentManagerListener {
             override fun selectionChanged(event: ContentManagerEvent) {
                 if (event.operation != ContentManagerEvent.ContentOperation.add) return
-                event.content.getUserData(ConversationTabs.CONTROLLER)?.let {
+                event.content.getUserData(ConversationView.CONTROLLER)?.let {
                     state.selectedId = it.conversation.id
                 }
-                ConversationTabs.focusInput(event.content)
             }
 
             override fun contentRemoved(event: ContentManagerEvent) {
-                val controller = event.content.getUserData(ConversationTabs.CONTROLLER)
+                val controller = event.content.getUserData(ConversationView.CONTROLLER)
                 if (controller != null && controller.conversation.transcript.isEmpty()) {
+                    view.release(controller)
                     manager.delete(controller)
                 } else {
                     manager.persist()
                 }
-                openFreshWhenEmpty(project, toolWindow, manager)
+                openFreshWhenEmpty(project, toolWindow, manager, view)
             }
         })
     }
@@ -57,12 +55,13 @@ class ChiselToolWindowFactory : ToolWindowFactory, DumbAware {
         project: Project,
         toolWindow: ToolWindow,
         manager: ConversationManager,
+        view: ConversationView,
     ) {
         ApplicationManager.getApplication().invokeLater(
             {
                 if (project.isDisposed || toolWindow.isDisposed) return@invokeLater
                 if (toolWindow.contentManager.contentCount > 0) return@invokeLater
-                ConversationTabs.add(project, toolWindow, manager.create())
+                view.show(toolWindow, manager.create())
             },
             project.disposed,
         )

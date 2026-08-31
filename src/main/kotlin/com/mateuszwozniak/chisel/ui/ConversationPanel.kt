@@ -90,7 +90,7 @@ class ConversationPanel(
     }
 
     override fun onTitleChanged(title: String) = onEventDispatchThread {
-        ConversationTabs.retitle(project, controller)
+        ConversationView.getInstance(project).retitle(controller)
     }
 
     val focusTarget: JComponent get() = input.focusTarget

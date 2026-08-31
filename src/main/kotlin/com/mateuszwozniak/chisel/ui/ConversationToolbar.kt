@@ -145,7 +145,7 @@ class ConversationToolbar(
             Messages.getWarningIcon(),
         )
         if (confirmed != Messages.YES) return
-        ConversationTabs.close(project, controller)
+        ConversationView.getInstance(project).close(controller)
         ConversationManager.getInstance(project).delete(controller)
     }
 
