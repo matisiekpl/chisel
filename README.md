@@ -1,8 +1,9 @@
 # Chisel
 
-An IntelliJ IDEA tool window that runs the Claude Code CLI installed on your machine and stops
-every file write in a review dialog, where the proposal can be commented line by line and edited
-by hand before it reaches disk.
+Every file the agent writes lands in a diff before it reaches disk. Lines take comments, the
+proposal itself is editable, and both go back as one correction that the agent carries into the
+files it writes afterwards. Plans, shell commands and questions stop in the same way, and a
+message can be rewound with the files it touched.
 
 ## Reviewing a write
 
