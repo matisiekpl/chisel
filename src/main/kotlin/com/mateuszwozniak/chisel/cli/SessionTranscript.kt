@@ -73,7 +73,7 @@ class SessionTranscript(private val file: Path) {
 
     private fun appendPrompt(text: String, uuid: String?) {
         val trimmed = text.trim()
-        if (trimmed.isEmpty() || trimmed.startsWith(COMMAND_PREFIX)) return
+        if (trimmed.isEmpty() || ClaudeSessions.isGenerated(trimmed)) return
         items.add(TranscriptItem.UserPrompt(nextId(), trimmed, uuid))
     }
 
@@ -84,8 +84,4 @@ class SessionTranscript(private val file: Path) {
     }
 
     private fun nextId(): String = "restored-${counter.incrementAndGet()}"
-
-    private companion object {
-        const val COMMAND_PREFIX = "<"
-    }
 }

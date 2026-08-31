@@ -43,7 +43,7 @@ class ConversationManager(private val project: Project) : Disposable {
             val settings = ChiselSettings.getInstance()
             val conversation = Conversation(
                 id,
-                entry.title ?: nextTitle(),
+                titleOf(entry),
                 mode,
                 AgentModel.entries.firstOrNull { it.name == entry.model } ?: settings.modelFor(mode),
                 EffortLevel.entries.firstOrNull { it.name == entry.effort } ?: settings.effortFor(mode),
@@ -57,6 +57,11 @@ class ConversationManager(private val project: Project) : Disposable {
         if (controllers.isEmpty()) create()
         return conversations()
     }
+
+    private fun titleOf(entry: ConversationEntry): String =
+        entry.title?.takeIf { !ClaudeSessions.isGenerated(it) }
+            ?: entry.sessionId?.let { ClaudeSessions.promptTitleOf(project.basePath, it) }
+            ?: nextTitle()
 
     private fun importTerminalSessions() {
         val state = ConversationState.getInstance(project).state

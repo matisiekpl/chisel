@@ -51,6 +51,11 @@ object ClaudeSessions {
         }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
+    fun promptTitleOf(projectPath: String?, sessionId: String): String? {
+        val directory = directoryFor(projectPath) ?: return null
+        return firstPrompt(directory.resolve(sessionId + SUFFIX))
+    }
+
     fun delete(projectPath: String?, sessionId: String) {
         val directory = directoryFor(projectPath) ?: return
         runCatching { Files.deleteIfExists(directory.resolve(sessionId + SUFFIX)) }
@@ -82,21 +87,35 @@ object ClaudeSessions {
     }.getOrNull()
 
     private fun promptOf(root: JsonObject): String? {
-        if (root.string("type") != "user" || root.bool("isSidechain")) return null
+        if (root.string("type") != "user" || root.bool("isSidechain") || root.bool("isMeta")) return null
         val content = root.obj("message")?.get("content") ?: return null
-        val text = when {
-            content.isJsonPrimitive -> content.asString
+        val texts = when {
+            content.isJsonPrimitive -> listOf(content.asString)
             content.isJsonArray -> content.asJsonArray
                 .mapNotNull { it as? JsonObject }
-                .firstOrNull { it.string("type") == "text" }
-                ?.string("text")
+                .filter { it.string("type") == "text" }
+                .mapNotNull { it.string("text") }
 
-            else -> null
+            else -> emptyList()
         }
-        return text?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()?.takeIf { it.isNotEmpty() }
+        return texts.firstNotNullOfOrNull { promptLine(it) }
     }
+
+    private fun promptLine(text: String): String? {
+        if (isGenerated(text)) return null
+        return text.lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.isNotEmpty() && !isGenerated(it) }
+    }
+
+    fun isGenerated(text: String): Boolean = GENERATED.containsMatchIn(text.trimStart())
 
     private const val SUFFIX = ".jsonl"
 
     private const val SCAN_LINES = 200L
+
+    private val GENERATED = Regex(
+        "^</?(local-command-[a-z]+|command-(name|message|args|contents)|" +
+            "system-reminder|user-prompt-submit-hook)>",
+    )
 }
