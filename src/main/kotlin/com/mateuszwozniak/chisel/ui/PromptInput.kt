@@ -9,6 +9,8 @@ import com.intellij.openapi.actionSystem.CustomShortcutSet
 import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.actionSystem.ShortcutSet
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.editor.event.DocumentEvent
+import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.fileChooser.FileChooser
@@ -172,6 +174,9 @@ class PromptInput(
         stopButton.preferredSize = Dimension(JBUI.scale(BUTTON_SIZE), JBUI.scale(BUTTON_SIZE))
         attachButton.preferredSize = Dimension(JBUI.scale(BUTTON_SIZE), JBUI.scale(BUTTON_SIZE))
         schemaButton.preferredSize = Dimension(JBUI.scale(BUTTON_SIZE), JBUI.scale(BUTTON_SIZE))
+        promptField.addDocumentListener(object : DocumentListener {
+            override fun documentChanged(event: DocumentEvent) = TypingActivity.record()
+        })
         promptField.addFocusListener(object : FocusAdapter() {
             override fun focusGained(event: FocusEvent) = card.showFocused(true)
 

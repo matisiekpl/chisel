@@ -18,6 +18,7 @@ import com.mateuszwozniak.chisel.service.ConversationController
 import com.mateuszwozniak.chisel.service.FeedbackFormatter
 import com.mateuszwozniak.chisel.service.PermissionRouter
 import com.mateuszwozniak.chisel.state.ChiselSettings
+import com.mateuszwozniak.chisel.ui.TypingActivity
 import com.mateuszwozniak.chisel.util.ProjectPaths
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
@@ -86,7 +87,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         input: WriteToolInput,
         respond: (PermissionDecision) -> Unit,
     ) {
-        onEventDispatchThread {
+        showWhenIdle(request.requestId) {
             val displayPath = ProjectPaths.relative(project.basePath, input.filePath)
             val dialog = EditApprovalDialog(project, input, displayPath)
             withDialog(controller.conversation.id, request.requestId, dialog, respond) {
@@ -129,7 +130,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         request: PermissionRequest,
         respond: (PermissionDecision) -> Unit,
     ) {
-        onEventDispatchThread {
+        showWhenIdle(request.requestId) {
             val dialog = CommandApprovalDialog(
                 project,
                 request.toolName,
@@ -152,7 +153,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         questions: List<UserQuestion>,
         respond: (PermissionDecision) -> Unit,
     ) {
-        onEventDispatchThread {
+        showWhenIdle(request.requestId) {
             val dialog = QuestionDialog(project, questions)
             withDialog(controller.conversation.id, request.requestId, dialog, respond) {
                 val answers = dialog.answers()
@@ -177,7 +178,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         request: PermissionRequest,
         respond: (PermissionDecision) -> Unit,
     ) {
-        onEventDispatchThread {
+        showWhenIdle(request.requestId) {
             val plan = request.input.string("plan").orEmpty()
             val dialog = PlanApprovalDialog(project, plan)
             withDialog(controller.conversation.id, request.requestId, dialog, respond) {
@@ -188,6 +189,14 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
                 }
                 val notes = dialog.notes().ifEmpty { KEEP_PLANNING_DENIAL }
                 sendDecision(respond, PermissionDecision.Deny(notes))
+            }
+        }
+    }
+
+    private fun showWhenIdle(requestId: String, show: () -> Unit) {
+        onEventDispatchThread {
+            TypingActivity.whenIdle {
+                if (!cancelled.remove(requestId)) show()
             }
         }
     }
