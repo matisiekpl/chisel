@@ -13,6 +13,9 @@ import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.markup.HighlighterLayer
+import com.intellij.openapi.editor.markup.HighlighterTargetArea
+import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.ide.CopyPasteManager
@@ -30,6 +33,7 @@ import java.awt.Color
 import java.awt.Cursor
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.Font
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
@@ -175,7 +179,10 @@ class PromptInput(
         attachButton.preferredSize = Dimension(JBUI.scale(BUTTON_SIZE), JBUI.scale(BUTTON_SIZE))
         schemaButton.preferredSize = Dimension(JBUI.scale(BUTTON_SIZE), JBUI.scale(BUTTON_SIZE))
         promptField.addDocumentListener(object : DocumentListener {
-            override fun documentChanged(event: DocumentEvent) = TypingActivity.record()
+            override fun documentChanged(event: DocumentEvent) {
+                TypingActivity.record()
+                highlightCommand()
+            }
         })
         promptField.addFocusListener(object : FocusAdapter() {
             override fun focusGained(event: FocusEvent) = card.showFocused(true)
@@ -403,6 +410,21 @@ class PromptInput(
         }
     }
 
+    private fun highlightCommand() {
+        val markup = promptField.editor?.markupModel ?: return
+        markup.removeAllHighlighters()
+        val text = promptField.text
+        if (!text.startsWith(COMMAND_PREFIX)) return
+        val end = text.indexOfFirst { it.isWhitespace() }.takeIf { it > 1 } ?: text.length
+        markup.addRangeHighlighter(
+            0,
+            end,
+            HighlighterLayer.SELECTION,
+            TextAttributes(COMMAND, null, null, null, Font.PLAIN),
+            HighlighterTargetArea.EXACT_RANGE,
+        )
+    }
+
     private fun modeShortcut(): ShortcutSet = CustomShortcutSet(
         KeyStroke.getKeyStroke(KeyEvent.VK_TAB, InputEvent.SHIFT_DOWN_MASK),
     )
@@ -450,6 +472,9 @@ class PromptInput(
 
         fun surface(): Color = EditorColorsManager.getInstance().globalScheme.defaultBackground
 
+        val COMMAND = JBColor(Color(0x2E, 0x70, 0xB8), Color(0x58, 0x9D, 0xF6))
+
+        const val COMMAND_PREFIX = "/"
         const val DEFAULT_HEIGHT = 88
         const val MIN_HEIGHT = 48
         const val MAX_HEIGHT = 600
