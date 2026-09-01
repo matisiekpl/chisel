@@ -7,9 +7,13 @@ import com.mateuszwozniak.chisel.model.TranscriptItem
 import com.mateuszwozniak.chisel.protocol.bool
 import com.mateuszwozniak.chisel.protocol.obj
 import com.mateuszwozniak.chisel.protocol.string
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
 import java.time.Instant
 import kotlin.io.path.name
 import kotlin.streams.asSequence
@@ -59,6 +63,22 @@ object ClaudeSessions {
     fun delete(projectPath: String?, sessionId: String) {
         val directory = directoryFor(projectPath) ?: return
         runCatching { Files.deleteIfExists(directory.resolve(sessionId + SUFFIX)) }
+    }
+
+    fun markInteractive(projectPath: String?, sessionId: String) {
+        val directory = directoryFor(projectPath) ?: return
+        val file = directory.resolve(sessionId + SUFFIX)
+        if (!Files.isWritable(file)) return
+        runCatching {
+            val recorded = Files.readString(file)
+            if (!recorded.contains(PRINT_ENTRYPOINT)) return
+            val rewritten = recorded.replace(PRINT_ENTRYPOINT, TERMINAL_ENTRYPOINT)
+                .toByteArray(StandardCharsets.UTF_8)
+            FileChannel.open(file, StandardOpenOption.WRITE).use { channel ->
+                channel.write(ByteBuffer.wrap(rewritten))
+                channel.truncate(rewritten.size.toLong())
+            }
+        }
     }
 
     private fun directoryFor(projectPath: String?): Path? {
@@ -111,6 +131,10 @@ object ClaudeSessions {
     fun isGenerated(text: String): Boolean = GENERATED.containsMatchIn(text.trimStart())
 
     private const val SUFFIX = ".jsonl"
+
+    private const val PRINT_ENTRYPOINT = "\"entrypoint\":\"sdk-cli\""
+
+    private const val TERMINAL_ENTRYPOINT = "\"entrypoint\":\"cli\""
 
     private const val SCAN_LINES = 200L
 

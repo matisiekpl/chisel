@@ -518,6 +518,7 @@ class ConversationController(
         runCatching {
             refreshContext()
             adoptGeneratedTitle()
+            conversation.sessionId?.let { ClaudeSessions.markInteractive(project.basePath, it) }
         }.onFailure { thisLogger().warn("Could not refresh conversation state", it) }
         drainQueue()
     }

@@ -66,7 +66,7 @@ class ConversationManager(private val project: Project) : Disposable {
             ?: entry.sessionId?.let { ClaudeSessions.promptTitleOf(project.basePath, it) }
             ?: nextTitle()
 
-    private fun importTerminalSessions() {
+    fun importTerminalSessions() {
         val known = knownSessions()
         ApplicationManager.getApplication().executeOnPooledThread {
             val read = ClaudeSessions.list(project.basePath)

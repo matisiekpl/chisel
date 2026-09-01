@@ -13,6 +13,8 @@ import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
+import com.intellij.openapi.wm.ToolWindow
+import com.intellij.openapi.wm.ex.ToolWindowManagerListener
 import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.PopupHandler
@@ -110,6 +112,14 @@ class ConversationListPanel(private val project: Project) :
         setContent(buildContent())
 
         manager.addChangeListener(this)
+        project.messageBus.connect(this).subscribe(
+            ToolWindowManagerListener.TOPIC,
+            object : ToolWindowManagerListener {
+                override fun toolWindowShown(toolWindow: ToolWindow) {
+                    if (toolWindow.id == TOOL_WINDOW_ID) manager.importTerminalSessions()
+                }
+            },
+        )
         refresh()
     }
 
@@ -259,6 +269,7 @@ class ConversationListPanel(private val project: Project) :
 
     private companion object {
         const val PLACE = "ChiselConversationList"
+        const val TOOL_WINDOW_ID = "Conversations"
         const val GROUP_LABEL = "Conversations"
         const val TITLE_LIMIT = 36
     }
