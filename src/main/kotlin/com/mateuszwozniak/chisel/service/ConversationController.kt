@@ -327,6 +327,7 @@ class ConversationController(
             }
         }
         discard(pending)
+        if (event.parentToolUseId == null) drainQueue()
     }
 
     private fun settleText(
@@ -423,7 +424,7 @@ class ConversationController(
             .filterIsInstance<ContentBlock.Text>()
             .joinToString("\n") { it.text }
             .trim()
-        if (text.isEmpty()) return
+        if (text.isEmpty() || ClaudeSessions.isGenerated(text)) return
         conversation.updatedAt = System.currentTimeMillis()
         appendItem(TranscriptItem.UserPrompt(nextId(), text, uuid))
         changeBusy(true)

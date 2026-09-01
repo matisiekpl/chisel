@@ -116,6 +116,6 @@ object ClaudeSessions {
 
     private val GENERATED = Regex(
         "^</?(local-command-[a-z]+|command-(name|message|args|contents)|" +
-            "system-reminder|user-prompt-submit-hook)>",
+            "system-reminder|user-prompt-submit-hook|task-notification)>",
     )
 }
