@@ -26,7 +26,7 @@ class ClaudeCommandBuilder(
         commandLine.addParameters("--model", options.model.alias)
         commandLine.addParameters("--effort", options.effort.value)
         if (options.mode == AgentMode.IMPLEMENTATION) {
-            commandLine.addParameters("--append-system-prompt", READABLE_COMMANDS)
+            commandLine.addParameters("--append-system-prompt", IMPLEMENTATION_PROMPT)
         }
         if (options.effort.ultracode) {
             commandLine.addParameters("--settings", ULTRACODE_SETTINGS)
@@ -48,8 +48,13 @@ class ClaudeCommandBuilder(
 
         private const val ULTRACODE_SETTINGS = "{\"ultracode\":true}"
 
-        private const val READABLE_COMMANDS =
-            "A developer reads every shell command you run, in a review dialog, before approving it. " +
+        private const val IMPLEMENTATION_PROMPT =
+            "Every change to a file goes through the Write, Edit and NotebookEdit tools, so the " +
+                "developer sees it as a diff and can correct it before it reaches disk. Never create, " +
+                "modify or delete a file from Bash: no sed -i, no redirect into a file, no heredoc, " +
+                "no cp, mv, rm or touch to change contents. Bash reads and inspects, it does not " +
+                "edit.\n" +
+                "A developer reads every shell command you run, in a review dialog, before approving it. " +
                 "Write commands so that reading one tells them exactly what will happen.\n" +
                 "- Run one command per step, each doing a single thing. Do not chain unrelated work " +
                 "with && or ; into a single call.\n" +

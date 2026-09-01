@@ -25,7 +25,10 @@ import java.util.concurrent.ConcurrentHashMap
 class ApprovalDialogs(private val project: Project) : PermissionRouter {
 
     private val openDialogs = ConcurrentHashMap<String, DialogWrapper>()
+    private val outstanding = ConcurrentHashMap<String, Outstanding>()
     private val cancelled = Collections.synchronizedSet(mutableSetOf<String>())
+
+    private class Outstanding(val conversationId: String, val respond: (PermissionDecision) -> Unit)
 
     override fun handle(
         controller: ConversationController,
@@ -34,7 +37,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
     ) {
         val questions = UserQuestion.parse(request.toolName, request.input)
         if (questions != null) {
-            showQuestions(request, questions, respond)
+            showQuestions(controller, request, questions, respond)
             return
         }
         if (controller.conversation.mode == AgentMode.ASK) {
@@ -51,14 +54,14 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
             return
         }
         if (writeInput != null) {
-            showEdit(request, writeInput, respond)
+            showEdit(controller, request, writeInput, respond)
             return
         }
         if (allowedWhilePlanning(controller.conversation.mode, request.toolName) || readsOnly(request)) {
             respond(PermissionDecision.Allow())
             return
         }
-        showCommand(request, respond)
+        showCommand(controller, request, respond)
     }
 
     private fun allowedWhilePlanning(mode: AgentMode, toolName: String): Boolean =
@@ -78,6 +81,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
     }
 
     private fun showEdit(
+        controller: ConversationController,
         request: PermissionRequest,
         input: WriteToolInput,
         respond: (PermissionDecision) -> Unit,
@@ -85,7 +89,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         onEventDispatchThread {
             val displayPath = ProjectPaths.relative(project.basePath, input.filePath)
             val dialog = EditApprovalDialog(project, input, displayPath)
-            withDialog(request.requestId, dialog) {
+            withDialog(controller.conversation.id, request.requestId, dialog, respond) {
                 val formatter = FeedbackFormatter(displayPath)
                 val decision = when (dialog.outcome) {
                     EditApprovalDialog.Outcome.ACCEPT -> PermissionDecision.Allow()
@@ -99,12 +103,32 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
                         interrupt = true,
                     )
                 }
+                val cascade = when (dialog.outcome) {
+                    EditApprovalDialog.Outcome.ACCEPT -> null
+                    EditApprovalDialog.Outcome.FEEDBACK -> FEEDBACK_CASCADE_DENIAL
+                    EditApprovalDialog.Outcome.REJECT -> REJECT_CASCADE_DENIAL
+                }
+                cascade?.let { denyOutstanding(controller.conversation.id, it) }
                 sendDecision(respond, decision)
             }
         }
     }
 
-    private fun showCommand(request: PermissionRequest, respond: (PermissionDecision) -> Unit) {
+    private fun denyOutstanding(conversationId: String, message: String) {
+        outstanding.forEach { (identifier, entry) ->
+            if (entry.conversationId != conversationId) return@forEach
+            outstanding.remove(identifier)
+            cancelled.add(identifier)
+            openDialogs.remove(identifier)?.close(DialogWrapper.CANCEL_EXIT_CODE)
+            sendDecision(entry.respond, PermissionDecision.Deny(message))
+        }
+    }
+
+    private fun showCommand(
+        controller: ConversationController,
+        request: PermissionRequest,
+        respond: (PermissionDecision) -> Unit,
+    ) {
         onEventDispatchThread {
             val dialog = CommandApprovalDialog(
                 project,
@@ -112,7 +136,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
                 commandOf(request),
                 request.input.string("description") ?: request.decisionReason,
             )
-            withDialog(request.requestId, dialog) {
+            withDialog(controller.conversation.id, request.requestId, dialog, respond) {
                 val decision = when (dialog.outcome) {
                     CommandApprovalDialog.Outcome.ALLOW -> PermissionDecision.Allow()
                     CommandApprovalDialog.Outcome.DENY -> PermissionDecision.Deny(DEFAULT_DENIAL)
@@ -123,13 +147,14 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
     }
 
     private fun showQuestions(
+        controller: ConversationController,
         request: PermissionRequest,
         questions: List<UserQuestion>,
         respond: (PermissionDecision) -> Unit,
     ) {
         onEventDispatchThread {
             val dialog = QuestionDialog(project, questions)
-            withDialog(request.requestId, dialog) {
+            withDialog(controller.conversation.id, request.requestId, dialog, respond) {
                 val answers = dialog.answers()
                 val decision = if (dialog.outcome == QuestionDialog.Outcome.ANSWER && answers.isNotEmpty()) {
                     PermissionDecision.Allow(answered(request.input, answers))
@@ -155,7 +180,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         onEventDispatchThread {
             val plan = request.input.string("plan").orEmpty()
             val dialog = PlanApprovalDialog(project, plan)
-            withDialog(request.requestId, dialog) {
+            withDialog(controller.conversation.id, request.requestId, dialog, respond) {
                 if (dialog.outcome == PlanApprovalDialog.Outcome.IMPLEMENT) {
                     sendDecision(respond, PermissionDecision.Allow())
                     controller.changeMode(AgentMode.IMPLEMENTATION)
@@ -167,10 +192,18 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         }
     }
 
-    private fun withDialog(requestId: String, dialog: DialogWrapper, onClosed: () -> Unit) {
+    private fun withDialog(
+        conversationId: String,
+        requestId: String,
+        dialog: DialogWrapper,
+        respond: (PermissionDecision) -> Unit,
+        onClosed: () -> Unit,
+    ) {
         openDialogs[requestId] = dialog
+        outstanding[requestId] = Outstanding(conversationId, respond)
         Disposer.register(dialog.disposable, Disposable {
             openDialogs.remove(requestId)
+            outstanding.remove(requestId)
             if (!cancelled.remove(requestId)) onClosed()
         })
         dialog.show()
@@ -208,6 +241,14 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
             "I have not approved this plan yet. Keep refining it and call ExitPlanMode again."
 
         const val DEFAULT_DENIAL = "I did not allow this call. Try a different approach."
+
+        const val FEEDBACK_CASCADE_DENIAL =
+            "I sent an earlier write from this batch back for changes, so this call is dropped: it " +
+                "builds on a file that is not on disk yet. Redo it after applying my feedback."
+
+        const val REJECT_CASCADE_DENIAL =
+            "I rejected an earlier write from this batch and stopped the turn, so this call is " +
+                "dropped. Wait for my next instruction."
 
         const val QUESTION_DENIAL =
             "I skipped the question. Pick the approach you think is best and keep going."
