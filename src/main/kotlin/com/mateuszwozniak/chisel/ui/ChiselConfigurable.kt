@@ -35,6 +35,14 @@ class ChiselConfigurable : BoundConfigurable("Chisel") {
                 .comment("MCP tools run without an approval dialog while planning. File writes stay blocked.")
         }
         row {
+            checkBox("Auto-approve read-only commands")
+                .bindSelected(settings::autoAcceptReadOnlyCommands)
+                .comment(
+                    "grep, sed, cat, head, find and other read-only commands run without an approval " +
+                        "dialog in every mode. Redirections, in-place edits and anything else keep asking."
+                )
+        }
+        row {
             comment("The mode, model and effort apply to conversations started after the change.")
         }
     }

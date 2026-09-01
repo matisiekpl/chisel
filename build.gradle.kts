@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.mateuszwozniak"
-version = "0.4.1"
+version = "0.5.0"
 
 dependencies {
     intellijPlatform {

@@ -10,6 +10,7 @@ import com.intellij.openapi.util.Disposer
 import com.mateuszwozniak.chisel.model.AgentMode
 import com.mateuszwozniak.chisel.protocol.PermissionDecision
 import com.mateuszwozniak.chisel.protocol.PermissionRequest
+import com.mateuszwozniak.chisel.protocol.ReadOnlyCommand
 import com.mateuszwozniak.chisel.protocol.UserQuestion
 import com.mateuszwozniak.chisel.protocol.WriteToolInput
 import com.mateuszwozniak.chisel.protocol.string
@@ -53,7 +54,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
             showEdit(request, writeInput, respond)
             return
         }
-        if (allowedWhilePlanning(controller.conversation.mode, request.toolName)) {
+        if (allowedWhilePlanning(controller.conversation.mode, request.toolName) || readsOnly(request)) {
             respond(PermissionDecision.Allow())
             return
         }
@@ -64,6 +65,10 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         mode == AgentMode.PLAN &&
             toolName.startsWith(MCP_PREFIX) &&
             ChiselSettings.getInstance().allowMcpInPlanMode
+
+    private fun readsOnly(request: PermissionRequest): Boolean =
+        ChiselSettings.getInstance().autoAcceptReadOnlyCommands &&
+            ReadOnlyCommand.matches(request.toolName, request.input)
 
     override fun cancel(requestId: String) {
         cancelled.add(requestId)

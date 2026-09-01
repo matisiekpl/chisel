@@ -21,6 +21,7 @@ class ChiselSettings : SimplePersistentStateComponent<ChiselSettings.Model>(Mode
         var implementationModel by enum(AgentModel.SONNET)
         var implementationEffort by enum(EffortLevel.MEDIUM)
         var allowMcpInPlanMode by property(true)
+        var autoAcceptReadOnlyCommands by property(true)
     }
 
     var defaultMode: AgentMode
@@ -57,6 +58,12 @@ class ChiselSettings : SimplePersistentStateComponent<ChiselSettings.Model>(Mode
         get() = state.allowMcpInPlanMode
         set(value) {
             state.allowMcpInPlanMode = value
+        }
+
+    var autoAcceptReadOnlyCommands: Boolean
+        get() = state.autoAcceptReadOnlyCommands
+        set(value) {
+            state.autoAcceptReadOnlyCommands = value
         }
 
     fun modelFor(mode: AgentMode): AgentModel =
