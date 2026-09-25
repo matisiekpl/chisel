@@ -1,4 +1,5 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -48,6 +49,7 @@ intellijPlatform {
 
         changeNotes = """
             <ul>
+              <li>Markdown rendering no longer relies on IntelliJ internal APIs.</li>
               <li>Stopping a turn always ends it: interrupts time out instead of hanging, and a second press kills the process.</li>
               <li>Tasks the agent creates appear in their own tool window on the left, with a live status, and no longer flood the transcript.</li>
               <li>MCP tools run without an approval dialog in Plan mode, switchable in Settings | Tools | Chisel.</li>
@@ -67,6 +69,10 @@ intellijPlatform {
     }
 
     pluginVerification {
+        failureLevel = listOf(
+            VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
+            VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES,
+        )
         ides {
             recommended()
         }

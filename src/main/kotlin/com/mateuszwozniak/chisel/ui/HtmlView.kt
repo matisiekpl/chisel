@@ -1,11 +1,10 @@
 package com.mateuszwozniak.chisel.ui
 
-import com.intellij.lang.documentation.QuickDocHighlightingHelper
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.components.JBHtmlPane
 import com.intellij.ui.components.JBHtmlPaneConfiguration
+import com.intellij.ui.components.JBHtmlPaneStyleConfiguration
 import java.awt.Cursor
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
@@ -14,13 +13,7 @@ import javax.swing.event.HyperlinkEvent
 
 class HtmlView(parent: Disposable) {
 
-    private val pane = JBHtmlPane(
-        QuickDocHighlightingHelper.getDefaultDocStyleOptions(
-            { EditorColorsManager.getInstance().globalScheme },
-            false,
-        ),
-        JBHtmlPaneConfiguration(),
-    )
+    private val pane = JBHtmlPane(JBHtmlPaneStyleConfiguration(), JBHtmlPaneConfiguration())
 
     init {
         pane.isOpaque = false
