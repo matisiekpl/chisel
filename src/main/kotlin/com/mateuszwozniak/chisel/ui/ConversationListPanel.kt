@@ -9,6 +9,8 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.Separator
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
@@ -123,7 +125,11 @@ class ConversationListPanel(private val project: Project) :
         refresh()
     }
 
-    override fun onConversationsChanged() = refresh()
+    override fun onConversationsChanged() = onEventDispatchThread { refresh() }
+
+    private fun onEventDispatchThread(action: () -> Unit) {
+        ApplicationManager.getApplication().invokeLater(action, ModalityState.defaultModalityState())
+    }
 
     override fun dispose() {
         manager.removeChangeListener(this)
