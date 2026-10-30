@@ -52,26 +52,46 @@ class ConversationManager(private val project: Project) : Disposable {
                 EffortLevel.entries.firstOrNull { it.name == entry.effort } ?: settings.effortFor(mode),
                 entry.sessionId,
             )
+            conversation.titleLocked = entry.titleLocked
             conversation.transcript.addAll(store.load(id))
             entry.updatedAt.takeIf { it > 0 }?.let { conversation.updatedAt = it }
             register(conversation)
         }
         if (controllers.isEmpty()) create()
+        refreshTitles()
         importTerminalSessions()
         return conversations()
     }
 
     private fun titleOf(entry: ConversationEntry): String =
-        entry.title?.takeIf { !ClaudeSessions.isGenerated(it) }
+        entry.title?.let { if (entry.titleLocked) it else ClaudeSessions.promptLine(it) }
             ?: entry.sessionId?.let { ClaudeSessions.promptTitleOf(project.basePath, it) }
             ?: nextTitle()
+
+    private fun refreshTitles() {
+        val unlocked = controllers.values.filterNot { it.conversation.titleLocked }
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val titles = unlocked.mapNotNull { controller ->
+                controller.conversation.sessionId
+                    ?.let { ClaudeSessions.titleOf(project.basePath, it) }
+                    ?.let { controller to it }
+            }
+            if (titles.isEmpty()) return@executeOnPooledThread
+            ApplicationManager.getApplication().invokeLater({
+                titles.forEach { (controller, title) -> controller.retitle(title) }
+            }, project.disposed)
+        }
+    }
 
     fun importTerminalSessions() {
         val known = knownSessions()
         ApplicationManager.getApplication().executeOnPooledThread {
             val read = ClaudeSessions.list(project.basePath)
                 .filterNot { it.id in known }
-                .map { it to ClaudeSessions.transcriptOf(project.basePath, it.id) }
+                .map { session ->
+                    val title = ClaudeSessions.titleOf(project.basePath, session.id) ?: session.title
+                    session.copy(title = title) to ClaudeSessions.transcriptOf(project.basePath, session.id)
+                }
                 .filter { it.second.isNotEmpty() }
             if (read.isEmpty()) return@executeOnPooledThread
             ApplicationManager.getApplication().invokeLater({ adopt(read) }, project.disposed)
@@ -165,6 +185,7 @@ class ConversationManager(private val project: Project) : Disposable {
             ConversationEntry().apply {
                 id = controller.conversation.id
                 title = controller.conversation.title
+                titleLocked = controller.conversation.titleLocked
                 sessionId = controller.conversation.sessionId
                 mode = controller.conversation.mode.name
                 model = controller.conversation.model.name

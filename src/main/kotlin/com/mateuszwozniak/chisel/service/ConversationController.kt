@@ -586,8 +586,11 @@ class ConversationController(
     private fun adoptGeneratedTitle() {
         if (conversation.titleLocked) return
         val sessionId = conversation.sessionId ?: return
-        val title = ClaudeSessions.titleOf(project.basePath, sessionId) ?: return
-        if (title == conversation.title) return
+        ClaudeSessions.titleOf(project.basePath, sessionId)?.let(::retitle)
+    }
+
+    fun retitle(title: String) {
+        if (conversation.titleLocked || title == conversation.title) return
         conversation.title = title
         listeners.forEach { it.onTitleChanged(title) }
     }
@@ -620,7 +623,7 @@ class ConversationController(
     }
 
     private fun adoptTitle(text: String) {
-        val line = text.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: return
+        val line = ClaudeSessions.promptLine(text) ?: return
         conversation.title = if (line.length > TITLE_LIMIT) {
             line.take(TITLE_LIMIT).trimEnd() + "\u2026"
         } else {

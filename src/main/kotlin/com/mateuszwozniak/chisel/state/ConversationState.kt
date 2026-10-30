@@ -12,6 +12,7 @@ import com.intellij.openapi.project.Project
 class ConversationEntry : BaseState() {
     var id by string()
     var title by string()
+    var titleLocked by property(false)
     var sessionId by string()
     var mode by string()
     var model by string()

@@ -46,7 +46,7 @@ object ClaudeSessions {
         if (!Files.isReadable(file)) return null
         return runCatching {
             Files.lines(file).use { lines ->
-                lines.map { line ->
+                lines.filter { it.contains(AI_TITLE) }.map { line ->
                     (runCatching { JsonParser.parseString(line) as? JsonObject }.getOrNull())
                         ?.takeIf { it.string("type") == "ai-title" }
                         ?.string("aiTitle")
@@ -57,7 +57,8 @@ object ClaudeSessions {
 
     fun promptTitleOf(projectPath: String?, sessionId: String): String? {
         val directory = directoryFor(projectPath) ?: return null
-        return firstPrompt(directory.resolve(sessionId + SUFFIX))
+        val file = directory.resolve(sessionId + SUFFIX)
+        return firstPrompt(file) ?: firstCommand(file)
     }
 
     fun delete(projectPath: String?, sessionId: String) {
@@ -91,7 +92,7 @@ object ClaudeSessions {
         val id = file.name.removeSuffix(SUFFIX)
         val modifiedAt = runCatching { Files.getLastModifiedTime(file).toInstant() }.getOrNull()
             ?: Instant.EPOCH
-        return TerminalSession(id, firstPrompt(file) ?: id, modifiedAt)
+        return TerminalSession(id, firstPrompt(file) ?: firstCommand(file) ?: id, modifiedAt)
     }
 
     private fun firstPrompt(file: Path): String? = runCatching {
@@ -106,10 +107,31 @@ object ClaudeSessions {
         }
     }.getOrNull()
 
+    private fun firstCommand(file: Path): String? = runCatching {
+        Files.lines(file).use { lines ->
+            lines.limit(SCAN_LINES).asSequence()
+                .mapNotNull { runCatching { JsonParser.parseString(it) as? JsonObject }.getOrNull() }
+                .mapNotNull { textsOf(it)?.joinToString("\n") }
+                .zipWithNext()
+                .firstOrNull { (text, next) -> COMMAND_NAME.containsMatchIn(text) && !next.contains(LOCAL_OUTPUT) }
+                ?.first
+                ?.let { text ->
+                    val name = COMMAND_NAME.find(text)?.groupValues?.get(1) ?: return@let null
+                    val arguments = COMMAND_ARGUMENTS.find(text)?.groupValues?.get(1).orEmpty()
+                    "$name $arguments".trim()
+                }
+        }
+    }.getOrNull()
+
     private fun promptOf(root: JsonObject): String? {
-        if (root.string("type") != "user" || root.bool("isSidechain") || root.bool("isMeta")) return null
+        if (root.bool("isMeta")) return null
+        return textsOf(root)?.firstNotNullOfOrNull { promptLine(it) }
+    }
+
+    private fun textsOf(root: JsonObject): List<String>? {
+        if (root.string("type") != "user" || root.bool("isSidechain")) return null
         val content = root.obj("message")?.get("content") ?: return null
-        val texts = when {
+        return when {
             content.isJsonPrimitive -> listOf(content.asString)
             content.isJsonArray -> content.asJsonArray
                 .mapNotNull { it as? JsonObject }
@@ -118,14 +140,13 @@ object ClaudeSessions {
 
             else -> emptyList()
         }
-        return texts.firstNotNullOfOrNull { promptLine(it) }
     }
 
-    private fun promptLine(text: String): String? {
+    fun promptLine(text: String): String? {
         if (isGenerated(text)) return null
         return text.lineSequence()
-            .map { it.trim() }
-            .firstOrNull { it.isNotEmpty() && !isGenerated(it) }
+            .map { it.replace(NOISE, "").trim() }
+            .firstOrNull { it.isNotEmpty() && !isGenerated(it) && !it.startsWith(INTERRUPTED) }
     }
 
     fun isGenerated(text: String): Boolean = GENERATED.containsMatchIn(text.trimStart())
@@ -138,8 +159,20 @@ object ClaudeSessions {
 
     private const val SCAN_LINES = 200L
 
+    private const val AI_TITLE = "\"ai-title\""
+
     private val GENERATED = Regex(
         "^</?(local-command-[a-z]+|command-(name|message|args|contents)|" +
             "system-reminder|user-prompt-submit-hook|task-notification)>",
     )
+
+    private const val INTERRUPTED = "[Request interrupted by user"
+
+    private val NOISE = Regex("\\[Image #\\d+]|</?pasted_content[^>]*>")
+
+    private const val LOCAL_OUTPUT = "<local-command-stdout>"
+
+    private val COMMAND_NAME = Regex("<command-name>(/[^<]+)</command-name>")
+
+    private val COMMAND_ARGUMENTS = Regex("<command-args>([^<]*)</command-args>")
 }
