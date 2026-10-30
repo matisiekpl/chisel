@@ -73,7 +73,10 @@ class ConversationManager(private val project: Project) : Disposable {
         ApplicationManager.getApplication().executeOnPooledThread {
             val titles = unlocked.mapNotNull { controller ->
                 controller.conversation.sessionId
-                    ?.let { ClaudeSessions.titleOf(project.basePath, it) }
+                    ?.let {
+                        ClaudeSessions.titleOf(project.basePath, it)
+                            ?: ClaudeSessions.promptTitleOf(project.basePath, it)
+                    }
                     ?.let { controller to it }
             }
             if (titles.isEmpty()) return@executeOnPooledThread
