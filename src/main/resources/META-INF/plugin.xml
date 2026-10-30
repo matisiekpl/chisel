@@ -24,5 +24,6 @@
                 displayName="Chisel"/>
         <diff.DiffExtension
                 implementation="com.mateuszwozniak.chisel.ui.approval.AnnotationDiffExtension"/>
+        <postStartupActivity implementation="com.mateuszwozniak.chisel.service.ErrorTracking"/>
     </extensions>
 </idea-plugin>

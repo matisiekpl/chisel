@@ -11,6 +11,7 @@ group = "com.mateuszwozniak"
 version = "0.9.1"
 
 dependencies {
+    implementation("io.sentry:sentry:8.62.0")
     intellijPlatform {
         intellijIdea("2025.3")
         bundledPlugin("com.intellij.database")
