@@ -2,6 +2,7 @@ package com.mateuszwozniak.chisel.service
 
 import com.google.gson.JsonObject
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -9,6 +10,7 @@ import com.mateuszwozniak.chisel.cli.ClaudeCommandBuilder
 import com.mateuszwozniak.chisel.cli.ClaudeExecutable
 import com.mateuszwozniak.chisel.cli.ClaudeSession
 import com.mateuszwozniak.chisel.cli.ClaudeSessions
+import com.mateuszwozniak.chisel.cli.ClaudeTitles
 import com.mateuszwozniak.chisel.cli.SessionListener
 import com.mateuszwozniak.chisel.cli.SessionStart
 import com.mateuszwozniak.chisel.model.AgentMode
@@ -612,7 +614,10 @@ class ConversationController(
                 attachments = prompt.attachments.map { it.path },
             )
         )
-        if (first) adoptTitle(prompt.text)
+        if (first) {
+            adoptTitle(prompt.text)
+            generateTitle(prompt.text)
+        }
         changeBusy(true)
         target.prompt(prompt.text, prompt.attachments)
     }
@@ -630,6 +635,15 @@ class ConversationController(
             line
         }
         listeners.forEach { it.onTitleChanged(conversation.title) }
+    }
+
+    private fun generateTitle(text: String) {
+        val workingDirectory = project.basePath ?: return
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val title = ClaudeTitles.generate(text, workingDirectory) ?: return@executeOnPooledThread
+            conversation.sessionId?.let { ClaudeSessions.appendTitle(workingDirectory, it, title) }
+            ApplicationManager.getApplication().invokeLater({ retitle(title) }, project.disposed)
+        }
     }
 
     private fun nextId(): String = "item-${itemCounter.incrementAndGet()}"

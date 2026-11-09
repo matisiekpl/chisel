@@ -55,6 +55,20 @@ object ClaudeSessions {
         }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
+    fun appendTitle(projectPath: String?, sessionId: String, title: String) {
+        val directory = directoryFor(projectPath) ?: return
+        val file = directory.resolve(sessionId + SUFFIX)
+        if (!Files.isWritable(file)) return
+        val entry = JsonObject().apply {
+            addProperty("type", "ai-title")
+            addProperty("aiTitle", title)
+            addProperty("sessionId", sessionId)
+        }
+        runCatching {
+            Files.writeString(file, entry.toString() + "\n", StandardCharsets.UTF_8, StandardOpenOption.APPEND)
+        }
+    }
+
     fun promptTitleOf(projectPath: String?, sessionId: String): String? {
         val directory = directoryFor(projectPath) ?: return null
         val file = directory.resolve(sessionId + SUFFIX)
