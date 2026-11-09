@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.mateuszwozniak"
-version = "0.10.2"
+version = "0.10.3"
 
 dependencies {
     implementation("io.sentry:sentry:8.62.0")
