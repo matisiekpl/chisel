@@ -43,6 +43,11 @@ class ChiselConfigurable : BoundConfigurable("Chisel") {
                 )
         }
         row {
+            checkBox("Open the Subagents window when a subagent starts")
+                .bindSelected(settings::autoOpenSubagents)
+                .comment("When off, the chat shows a notice for each started subagent.")
+        }
+        row {
             comment("The mode, model and effort apply to conversations started after the change.")
         }
     }

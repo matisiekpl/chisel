@@ -12,6 +12,7 @@ import com.mateuszwozniak.chisel.model.QueuedPrompt
 import com.mateuszwozniak.chisel.model.TodoItem
 import com.mateuszwozniak.chisel.service.ConversationController
 import com.mateuszwozniak.chisel.service.ConversationListener
+import com.mateuszwozniak.chisel.state.ChiselSettings
 import com.mateuszwozniak.chisel.ui.approval.RewindConfirmationDialog
 import com.mateuszwozniak.chisel.util.ProjectPaths
 import java.awt.BorderLayout
@@ -111,7 +112,7 @@ class ConversationPanel(
             dismissedAgents = false
             return
         }
-        if (agentsDialog == null && !dismissedAgents) openAgents()
+        if (agentsDialog == null && !dismissedAgents && ChiselSettings.getInstance().autoOpenSubagents) openAgents()
     }
 
     private fun openAgents() {

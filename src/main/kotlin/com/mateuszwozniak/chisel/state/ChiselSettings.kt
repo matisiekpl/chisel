@@ -22,6 +22,7 @@ class ChiselSettings : SimplePersistentStateComponent<ChiselSettings.Model>(Mode
         var implementationEffort by enum(EffortLevel.MEDIUM)
         var allowMcpInPlanMode by property(true)
         var autoAcceptReadOnlyCommands by property(true)
+        var autoOpenSubagents by property(true)
     }
 
     var defaultMode: AgentMode
@@ -64,6 +65,12 @@ class ChiselSettings : SimplePersistentStateComponent<ChiselSettings.Model>(Mode
         get() = state.autoAcceptReadOnlyCommands
         set(value) {
             state.autoAcceptReadOnlyCommands = value
+        }
+
+    var autoOpenSubagents: Boolean
+        get() = state.autoOpenSubagents
+        set(value) {
+            state.autoOpenSubagents = value
         }
 
     fun modelFor(mode: AgentMode): AgentModel =

@@ -257,6 +257,9 @@ class ConversationController(
                 conversation.turn(),
             )
         )
+        if (!ChiselSettings.getInstance().autoOpenSubagents) {
+            appendNotice("Subagent started: ${event.description}. Subagents in the toolbar shows its progress.", false)
+        }
         listeners.forEach { it.onTasksChanged() }
     }
 
