@@ -54,6 +54,9 @@ class ClaudeCommandBuilder(
                 "modify or delete a file from Bash: no sed -i, no redirect into a file, no heredoc, " +
                 "no cp, mv, rm or touch to change contents. Bash reads and inspects, it does not " +
                 "edit.\n" +
+                "When the developer rejects a change or asks for an explanation of it, answer in the " +
+                "chat: explain what the change does and why you proposed it, before trying anything " +
+                "else.\n" +
                 "A developer reads every shell command you run, in a review dialog, before approving it. " +
                 "Write commands so that reading one tells them exactly what will happen.\n" +
                 "- Run one command per step, each doing a single thing. Do not chain unrelated work " +
