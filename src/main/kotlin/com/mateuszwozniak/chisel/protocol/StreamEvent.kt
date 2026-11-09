@@ -34,6 +34,7 @@ sealed interface StreamEvent {
     data class ThinkingDelta(val text: String) : StreamEvent
 
     data class AssistantTurn(
+        val messageId: String?,
         val blocks: List<ContentBlock>,
         val parentToolUseId: String?,
     ) : StreamEvent

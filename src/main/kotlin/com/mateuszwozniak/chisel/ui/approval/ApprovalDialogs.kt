@@ -28,6 +28,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
     private val openDialogs = ConcurrentHashMap<String, DialogWrapper>()
     private val outstanding = ConcurrentHashMap<String, Outstanding>()
     private val cancelled = Collections.synchronizedSet(mutableSetOf<String>())
+    private val droppedMessages = ConcurrentHashMap<String, String>()
 
     private class Outstanding(val conversationId: String, val respond: (PermissionDecision) -> Unit)
 
@@ -36,6 +37,11 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         request: PermissionRequest,
         respond: (PermissionDecision) -> Unit,
     ) {
+        val dropped = controller.messageOf(request.toolUseId)?.let { droppedMessages[it] }
+        if (dropped != null) {
+            respond(PermissionDecision.Deny(dropped))
+            return
+        }
         val questions = UserQuestion.parse(request.toolName, request.input)
         if (questions != null) {
             showQuestions(controller, request, questions, respond)
@@ -76,6 +82,7 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
 
     override fun cancel(requestId: String) {
         cancelled.add(requestId)
+        outstanding.remove(requestId)
         onEventDispatchThread {
             openDialogs.remove(requestId)?.close(DialogWrapper.CANCEL_EXIT_CODE)
         }
@@ -87,10 +94,10 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         input: WriteToolInput,
         respond: (PermissionDecision) -> Unit,
     ) {
-        showWhenIdle(request.requestId) {
+        showWhenIdle(controller.conversation.id, request.requestId, respond) {
             val displayPath = ProjectPaths.relative(project.basePath, input.filePath)
             val dialog = EditApprovalDialog(project, input, displayPath)
-            withDialog(controller.conversation.id, request.requestId, dialog, respond) {
+            withDialog(request.requestId, dialog) {
                 val formatter = FeedbackFormatter(displayPath)
                 val decision = when (dialog.outcome) {
                     EditApprovalDialog.Outcome.ACCEPT -> PermissionDecision.Allow()
@@ -109,7 +116,10 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
                     EditApprovalDialog.Outcome.FEEDBACK -> FEEDBACK_CASCADE_DENIAL
                     EditApprovalDialog.Outcome.REJECT -> REJECT_CASCADE_DENIAL
                 }
-                cascade?.let { denyOutstanding(controller.conversation.id, it) }
+                cascade?.let { message ->
+                    controller.messageOf(request.toolUseId)?.let { droppedMessages[it] = message }
+                    denyOutstanding(controller.conversation.id, message)
+                }
                 sendDecision(respond, decision)
             }
         }
@@ -130,14 +140,14 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         request: PermissionRequest,
         respond: (PermissionDecision) -> Unit,
     ) {
-        showWhenIdle(request.requestId) {
+        showWhenIdle(controller.conversation.id, request.requestId, respond) {
             val dialog = CommandApprovalDialog(
                 project,
                 request.toolName,
                 commandOf(request),
                 request.input.string("description") ?: request.decisionReason,
             )
-            withDialog(controller.conversation.id, request.requestId, dialog, respond) {
+            withDialog(request.requestId, dialog) {
                 val decision = when (dialog.outcome) {
                     CommandApprovalDialog.Outcome.ALLOW -> PermissionDecision.Allow()
                     CommandApprovalDialog.Outcome.DENY -> PermissionDecision.Deny(DEFAULT_DENIAL)
@@ -153,9 +163,9 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         questions: List<UserQuestion>,
         respond: (PermissionDecision) -> Unit,
     ) {
-        showWhenIdle(request.requestId) {
+        showWhenIdle(controller.conversation.id, request.requestId, respond) {
             val dialog = QuestionDialog(project, questions)
-            withDialog(controller.conversation.id, request.requestId, dialog, respond) {
+            withDialog(request.requestId, dialog) {
                 val answers = dialog.answers()
                 val decision = if (dialog.outcome == QuestionDialog.Outcome.ANSWER && answers.isNotEmpty()) {
                     PermissionDecision.Allow(answered(request.input, answers))
@@ -178,10 +188,10 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         request: PermissionRequest,
         respond: (PermissionDecision) -> Unit,
     ) {
-        showWhenIdle(request.requestId) {
+        showWhenIdle(controller.conversation.id, request.requestId, respond) {
             val plan = request.input.string("plan").orEmpty()
             val dialog = PlanApprovalDialog(project, plan)
-            withDialog(controller.conversation.id, request.requestId, dialog, respond) {
+            withDialog(request.requestId, dialog) {
                 if (dialog.outcome == PlanApprovalDialog.Outcome.IMPLEMENT) {
                     sendDecision(respond, PermissionDecision.Allow())
                     controller.changeMode(AgentMode.IMPLEMENTATION)
@@ -193,23 +203,26 @@ class ApprovalDialogs(private val project: Project) : PermissionRouter {
         }
     }
 
-    private fun showWhenIdle(requestId: String, show: () -> Unit) {
+    private fun showWhenIdle(
+        conversationId: String,
+        requestId: String,
+        respond: (PermissionDecision) -> Unit,
+        show: () -> Unit,
+    ) {
+        outstanding[requestId] = Outstanding(conversationId, respond)
         onEventDispatchThread {
             TypingActivity.whenIdle {
-                if (!cancelled.remove(requestId)) show()
+                if (cancelled.remove(requestId)) outstanding.remove(requestId) else show()
             }
         }
     }
 
     private fun withDialog(
-        conversationId: String,
         requestId: String,
         dialog: DialogWrapper,
-        respond: (PermissionDecision) -> Unit,
         onClosed: () -> Unit,
     ) {
         openDialogs[requestId] = dialog
-        outstanding[requestId] = Outstanding(conversationId, respond)
         Disposer.register(dialog.disposable, Disposable {
             openDialogs.remove(requestId)
             outstanding.remove(requestId)

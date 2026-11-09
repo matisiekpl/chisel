@@ -37,6 +37,7 @@ import com.mateuszwozniak.chisel.protocol.string
 import com.mateuszwozniak.chisel.state.ChiselSettings
 import com.mateuszwozniak.chisel.util.VfsRefresh
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
 
@@ -50,6 +51,7 @@ class ConversationController(
     private val queued = CopyOnWriteArrayList<QueuedPrompt>()
     private val streamingItems = mutableListOf<TranscriptItem>()
     private val toolCalls = mutableMapOf<String, TranscriptItem.ToolCall>()
+    private val toolMessages = ConcurrentHashMap<String, String>()
     private val itemCounter = AtomicLong()
     private val standardError = StringBuilder()
 
@@ -179,6 +181,8 @@ class ConversationController(
             .mapNotNull { it.input.string("file_path") ?: it.input.string("notebook_path") }
             .distinct()
     }
+
+    fun messageOf(toolUseId: String?): String? = toolUseId?.let { toolMessages[it] }
 
     fun messagesDroppedAfter(messageUuid: String): Int {
         val index = conversation.transcript.indexOfFirst {
@@ -326,7 +330,10 @@ class ConversationController(
 
                 is ContentBlock.Thinking -> settleThinking(pending, block.text)
 
-                is ContentBlock.ToolUse -> appendToolCall(block, event.parentToolUseId)
+                is ContentBlock.ToolUse -> {
+                    event.messageId?.let { toolMessages[block.id] = it }
+                    appendToolCall(block, event.parentToolUseId)
+                }
 
                 is ContentBlock.ToolResult -> Unit
             }

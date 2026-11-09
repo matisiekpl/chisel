@@ -136,6 +136,7 @@ class StreamJsonCodec {
         "system" -> parseSystem(root)
         "stream_event" -> parseDelta(root)
         "assistant" -> StreamEvent.AssistantTurn(
+            root.obj("message")?.string("id"),
             ContentBlock.parseContent(root.obj("message")?.get("content")),
             root.string("parent_tool_use_id"),
         )
