@@ -1,8 +1,11 @@
 package com.mateuszwozniak.chisel.cli
 
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.CapturingProcessHandler
 import com.mateuszwozniak.chisel.model.AgentModel
+import com.mateuszwozniak.chisel.protocol.string
 import java.nio.charset.StandardCharsets
 
 object ClaudeTitles {
@@ -17,6 +20,8 @@ object ClaudeTitles {
             "--no-session-persistence",
             "--tools",
             "",
+            "--output-format",
+            "json",
         )
             .withWorkDirectory(workingDirectory)
             .withCharset(StandardCharsets.UTF_8)
@@ -27,7 +32,9 @@ object ClaudeTitles {
             handler.runProcess(TIMEOUT)
         }.getOrNull()
         if (output == null || output.exitCode != 0) return null
-        return output.stdout.lineSequence().firstOrNull { it.isNotBlank() }
+        val result = runCatching { JsonParser.parseString(output.stdout) as? JsonObject }.getOrNull()
+            ?.string("result")
+        return result?.lineSequence()?.firstOrNull { it.isNotBlank() }
             ?.trim()
             ?.trim('"', '\'', '.', '*', '#', ' ')
             ?.takeIf { it.isNotEmpty() }
